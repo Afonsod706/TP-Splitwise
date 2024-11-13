@@ -1,114 +1,52 @@
 package Servidor.src;
 
+import Servidor.src.Handler.ClienteHandler;
+import baseDados.Config.GestorBaseDados;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.io.*;
-import java.net.*;
-import java.sql.*;
+import java.sql.Connection;
 
 public class Servidor {
-    private static final int PORTA = 5001;
-    static int contClient = 0;
-    private Connection connection;
+    private int porta = 5001; // Porta fixa para o servidor
+    private Connection connection; // Conexão única compartilhada
 
-    public static void main(String[] args) {
-        new Servidor().start();
+    public Servidor() {
+        // Inicializar a conexão com o banco de dados ao iniciar o servidor
+        GestorBaseDados gestorBaseDados = new GestorBaseDados();
+        this.connection = gestorBaseDados.getConexao();
     }
 
-    public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(PORTA)) {
-            System.out.println("Servidor iniciado na porta " + PORTA);
-            conectarBaseDeDados();
+    public void iniciar() {
+        try (ServerSocket serverSocket = new ServerSocket(porta)) {
+            System.out.println("Servidor iniciado na porta " + porta);
 
             while (true) {
-                try {
-                    Socket clientSocket = serverSocket.accept();
-                    System.out.println("Cliente " + (++contClient) + " conectado: " + clientSocket.getInetAddress());
+                Socket clienteSocket = serverSocket.accept();
+                System.out.println("Cliente conectado: " + clienteSocket.getInetAddress());
 
-                    // Inicia um novo handler para cada cliente
-                    new Thread(new ClienteHandler(clientSocket, connection)).start();
-                } catch (IOException e) {
-                    System.err.println("Erro ao aceitar conexão de cliente: " + e.getMessage());
-                }
+                // Inicia um novo ClienteHandler e passa a conexão compartilhada
+                ClienteHandler clienteHandler = new ClienteHandler(clienteSocket, connection);
+                new Thread(clienteHandler).start();
             }
         } catch (IOException e) {
-            System.err.println("Erro ao iniciar o servidor: " + e.getMessage());
+            System.out.println("Erro ao iniciar o servidor: " + e.getMessage());
+        } finally {
+            // Fecha a conexão do banco de dados ao encerrar o servidor
+            try {
+                if (connection != null && !connection.isClosed()) {
+                    connection.close();
+                    System.out.println("Conexão com o banco de dados encerrada.");
+                }
+            } catch (Exception e) {
+                System.out.println("Erro ao fechar a conexão: " + e.getMessage());
+            }
         }
     }
 
-    private void conectarBaseDeDados() {
-        try {
-            String url = "jdbc:sqlite:src/Servidor/baseDados/database.db";
-
-            // Conexão com a base de dados SQLite
-            connection = DriverManager.getConnection(url);
-            System.out.println("Base de dados conectada com sucesso.");
-
-            // Criar tabelas se não existirem
-            criarTabelas();
-        } catch (SQLException e) {
-            System.err.println("Erro ao conectar com a base de dados: " + e.getMessage());
-        }
+    public static void main(String[] args) {
+        Servidor servidor = new Servidor();
+        servidor.iniciar();
     }
-
-    private void criarTabelas() {
-        String criarUtilizador = "CREATE TABLE IF NOT EXISTS Utilizador (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "nome TEXT NOT NULL," +
-                "email TEXT UNIQUE NOT NULL," +
-                "password TEXT NOT NULL" +
-                ");";
-
-        String criarGrupo = "CREATE TABLE IF NOT EXISTS Grupo (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "nome TEXT NOT NULL UNIQUE," +
-                "criador_id INTEGER," +
-                "FOREIGN KEY (criador_id) REFERENCES Utilizador(id)" +
-                ");";
-
-        String criarDespesa = "CREATE TABLE IF NOT EXISTS Despesa (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "data DATE NOT NULL," +
-                "descricao TEXT," +
-                "valor REAL NOT NULL," +
-                "pago_por INTEGER," +
-                "grupo_id INTEGER," +
-                "FOREIGN KEY (pago_por) REFERENCES Utilizador(id)," +
-                "FOREIGN KEY (grupo_id) REFERENCES Grupo(id)" +
-                ");";
-
-        String criarDivisaoDespesa = "CREATE TABLE IF NOT EXISTS Divisao_Despesa (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "despesa_id INTEGER," +
-                "utilizador_id INTEGER," +
-                "FOREIGN KEY (despesa_id) REFERENCES Despesa(id)," +
-                "FOREIGN KEY (utilizador_id) REFERENCES Utilizador(id)" +
-                ");";
-
-        String criarPagamento = "CREATE TABLE IF NOT EXISTS Pagamento (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "data DATE NOT NULL," +
-                "valor REAL NOT NULL," +
-                "pagador_id INTEGER," +
-                "recebedor_id INTEGER," +
-                "grupo_id INTEGER," +
-                "FOREIGN KEY (pagador_id) REFERENCES Utilizador(id)," +
-                "FOREIGN KEY (recebedor_id) REFERENCES Utilizador(id)," +
-                "FOREIGN KEY (grupo_id) REFERENCES Grupo(id)" +
-                ");";
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(criarUtilizador);
-            stmt.execute(criarGrupo);
-            stmt.execute(criarDespesa);
-            stmt.execute(criarDivisaoDespesa);
-            stmt.execute(criarPagamento);
-            System.out.println("Tabelas criadas com sucesso.");
-        } catch (SQLException e) {
-            System.err.println("Erro ao criar tabelas: " + e.getMessage());
-        }
-    }
-
 }
