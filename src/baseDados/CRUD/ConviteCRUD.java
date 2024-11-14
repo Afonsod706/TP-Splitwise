@@ -79,12 +79,11 @@ public class ConviteCRUD {
     }
 
     // Lista convites pendentes de um utilizador
-    public List<Convite> listarConvitesPorUtilizador(int idUtilizador, String estado) {
+    public List<Convite> listarTodosConvitesPorUtilizador(int idUtilizador) {
         List<Convite> convites = new ArrayList<>();
-        String sql = "SELECT * FROM Convite WHERE id_utilizador_convidado = ? AND estado = ?";
+        String sql = "SELECT * FROM Convite WHERE id_utilizador_convidado = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idUtilizador);
-            pstmt.setString(2, estado);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) {
                 convites.add(new Convite(
@@ -98,9 +97,33 @@ public class ConviteCRUD {
                 ));
             }
         } catch (SQLException e) {
-            System.err.println("Erro ao listar convites pendentes para o utilizador: " + e.getMessage());
+            System.err.println("Erro ao listar todos os convites para o utilizador: " + e.getMessage());
         }
         return convites;
     }
+    public Convite buscarConvitePorId(int idConvite) {
+        String sql = "SELECT * FROM Convite WHERE id_convite = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idConvite);
+            ResultSet rs = pstmt.executeQuery();
+
+            // Verifica se o convite foi encontrado e constrói o objeto Convite
+            if (rs.next()) {
+                return new Convite(
+                        rs.getInt("id_convite"),
+                        rs.getInt("id_utilizador_convite"),
+                        rs.getInt("id_grupo"),
+                        rs.getInt("id_utilizador_convidado"),
+                        rs.getString("estado"),
+                        rs.getString("data_envio"),
+                        rs.getString("data_resposta")
+                );
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao buscar convite por ID: " + e.getMessage());
+        }
+        return null; // Retorna null se o convite não for encontrado
+    }
+
 
 }

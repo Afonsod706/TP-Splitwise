@@ -29,7 +29,7 @@ public class Comunicacao implements Serializable {
         LISTAR_GRUPOS, EDICAO_NOME_GRUPO, ELIMINACAO_GRUPO, SAIR_GRUPO,
         INSERIR_DESPESA, TOTAL_GASTOS_GRUPO, HISTORICO_DESPESAS, EXPORTAR_DESPESAS,
         EDITAR_DESPESA, ELIMINAR_DESPESA, INSERIR_PAGAMENTO, LISTAR_PAGAMENTOS,
-        ELIMINAR_PAGAMENTO, SALDOS_GRUPO, LOGOUT
+        ELIMINAR_PAGAMENTO, SALDOS_GRUPO, MOSTRAR_INFORMACOES, LOGOUT
     }
 
     // Construtor padrão
@@ -128,4 +128,74 @@ public class Comunicacao implements Serializable {
                 return true;
         }
     }
+
+    // Novo método para mostrar informações detalhadas de cada entidade
+    public String mostrarInformacoes() {
+        StringBuilder info = new StringBuilder();
+
+        info.append("=== Informações da Comunicação ===\n");
+        info.append("Comando: ").append(comando).append("\n");
+        info.append("Mensagem do Servidor: ").append(mensagemServidor != null ? mensagemServidor : "N/A").append("\n");
+
+        if (utilizador != null) {
+            info.append("\n--- Informações do Utilizador ---\n");
+            info.append("ID: ").append(utilizador.getId()).append("\n");
+            info.append("Nome: ").append(utilizador.getNome()).append("\n");
+            info.append("Email: ").append(utilizador.getEmail()).append("\n");
+            info.append("Telefone: ").append(utilizador.getTelefone()).append("\n");
+        } else {
+            info.append("\nUtilizador: N/A\n");
+        }
+
+        if (grupo != null) {
+            info.append("\n--- Informações do Grupo ---\n");
+            info.append("ID Grupo: ").append(grupo.getIdGrupo()).append("\n");
+            info.append("Nome do Grupo: ").append(grupo.getNome()).append("\n");
+            info.append("ID Criador: ").append(grupo.getIdCriador()).append("\n");
+        } else {
+            info.append("\nGrupo: N/A\n");
+        }
+
+        if (despesa != null) {
+            info.append("\n--- Informações da Despesa ---\n");
+            info.append("ID Despesa: ").append(despesa.getId()).append("\n");
+            info.append("Descrição: ").append(despesa.getDescricao()).append("\n");
+            info.append("Valor: ").append(despesa.getValor()).append("\n");
+            info.append("ID Criador: ").append(despesa.getIdCriador()).append("\n");
+        } else {
+            info.append("\nDespesa: N/A\n");
+        }
+
+        if (pagamento != null) {
+            info.append("\n--- Informações do Pagamento ---\n");
+            info.append("ID Pagamento: ").append(pagamento.getIdPagamento()).append("\n");
+            info.append("Valor: ").append(pagamento.getValor()).append("\n");
+            info.append("Pagador: ").append(pagamento.getNomePagador()).append("\n");
+            info.append("Recebedor: ").append(pagamento.getNomeRecebedor()).append("\n");
+            info.append("Data: ").append(pagamento.getData()).append("\n");
+        } else {
+            info.append("\nPagamento: N/A\n");
+        }
+
+        if (convite != null) {
+            info.append("\n--- Informações do Convite ---\n");
+            info.append("ID Convite: ").append(convite.getIdConvite()).append("\n");
+            info.append("ID Grupo: ").append(convite.getIdGrupo()).append("\n");
+            info.append("Email Convidado: ").append(convite.getEmailConvidado()).append("\n");
+        } else {
+            info.append("\nConvite: N/A\n");
+        }
+
+        if (nomesParticipantes != null && !nomesParticipantes.isEmpty()) {
+            info.append("\n--- Participantes ---\n");
+            for (String nome : nomesParticipantes) {
+                info.append("- ").append(nome).append("\n");
+            }
+        } else {
+            info.append("\nParticipantes: N/A\n");
+        }
+
+        return info.toString();
+    }
+
 }

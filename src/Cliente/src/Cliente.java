@@ -11,18 +11,20 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
 
+import static Cliente.src.recursos.Comunicacao.Comando.*;
+
 public class Cliente {
     private String serverAddress;
     private int serverPort;
     private Socket socket;
     private ObjectOutputStream output;
     private ObjectInputStream input;
-    private Comunicacao comunicacaoAtual;  // Objeto que armazena o estado atual das respostas do servidor
+    private Comunicacao comunicacaoAtual;
 
     public Cliente(String serverAddress, int serverPort) {
         this.serverAddress = serverAddress;
         this.serverPort = serverPort;
-        this.comunicacaoAtual = new Comunicacao(); // Instância inicial vazia
+        this.comunicacaoAtual = new Comunicacao();
     }
 
     public void iniciar() {
@@ -51,18 +53,14 @@ public class Cliente {
             System.out.println("0. Sair");
             System.out.print("Escolha uma opção: ");
             int opcao = scanner.nextInt();
-            scanner.nextLine();  // Consumir a nova linha
+            scanner.nextLine();
 
             switch (opcao) {
                 case 1:
-                    if (registrar(scanner))
-                        exibirMenuPrincipal(scanner);
+                    if (registrar(scanner)) exibirMenuPrincipal(scanner);
                     break;
                 case 2:
-                    if (fazerLogin(scanner)) {
-                        System.out.println("nome" + comunicacaoAtual.getUtilizador().getNome() + comunicacaoAtual.getUtilizador().getId());
-                        exibirMenuPrincipal(scanner);
-                    }
+                    if (fazerLogin(scanner)) exibirMenuPrincipal(scanner);
                     break;
                 case 0:
                     encerrarConexao();
@@ -77,54 +75,88 @@ public class Cliente {
     private void exibirMenuPrincipal(Scanner scanner) {
         while (true) {
             System.out.println("\n--- Menu Principal ---");
+
+            // Comandos de Grupos
+            System.out.println("Grupos:");
             System.out.println("1. Criar Grupo");
             System.out.println("2. Selecionar Grupo");
-            System.out.println("3. Criar Convite");
-            System.out.println("4. Listar Convites");
-            System.out.println("5. Aceitar Convite");
-            System.out.println("6. Recusar Convite");
-            System.out.println("7. Listar Grupos");
-            System.out.println("8. Inserir Despesa");
-            System.out.println("9. Visualizar Total de Gastos");
-            System.out.println("10. Visualizar Histórico de Despesas");
-            System.out.println("11. Exportar Despesas para CSV");
-            System.out.println("12. Editar Despesa");
-            System.out.println("13. Eliminar Despesa");
-            System.out.println("14. Inserir Pagamento");
-            System.out.println("15. Listar Pagamentos");
-            System.out.println("16. Eliminar Pagamento");
-            System.out.println("17. Visualizar Saldos do Grupo");
-            System.out.println("18. Sair do Grupo");
+            System.out.println("3. Listar Grupos");
+            System.out.println("4. Sair do Grupo");
+
+            // Comandos de Convites
+            System.out.println("\nConvites:");
+            System.out.println("5. Criar Convite");
+            System.out.println("6. Listar Convites");
+            System.out.println("7. Aceitar Convite");
+            System.out.println("8. Recusar Convite");
+
+            // Comandos de Despesas
+            System.out.println("\nDespesas:");
+            System.out.println("9. Inserir Despesa");
+            System.out.println("10. Visualizar Total de Gastos");
+            System.out.println("11. Visualizar Histórico de Despesas");
+            System.out.println("12. Exportar Despesas para CSV");
+            System.out.println("13. Editar Despesa");
+            System.out.println("14. Eliminar Despesa");
+
+            // Comandos de Pagamentos
+            System.out.println("\nPagamentos:");
+            System.out.println("15. Inserir Pagamento");
+            System.out.println("16. Listar Pagamentos");
+            System.out.println("17. Eliminar Pagamento");
+
+            // Comandos de Saldos e Informações
+            System.out.println("\nSaldos e Informações:");
+            System.out.println("18. Visualizar Saldos do Grupo");
+            System.out.println("19. Mostrar Informações Detalhadas");
+
+            // Logout
+            System.out.println("\nConta:");
             System.out.println("0. Logout");
+
             System.out.print("Escolha uma opção: ");
             int opcao = scanner.nextInt();
-            scanner.nextLine(); // Consumir nova linha
+            scanner.nextLine();
 
             switch (opcao) {
-                case 1: criarGrupo(scanner); break;
-                case 2: selecionarGrupo(scanner); break;
-                case 3: criarConvite(scanner); break;
-                case 4: listarConvites(); break;
-                case 5: aceitarConvite(scanner); break;
-                case 6: recusarConvite(scanner); break;
-                case 7: listarGrupos(); break;
-                case 8: inserirDespesa(scanner); break;
-                case 9: visualizarTotalGastos(); break;
-                case 10: visualizarHistoricoDespesas(); break;
-                case 11: exportarDespesasParaCSV(); break;
-                case 12: editarDespesa(scanner); break;
-                case 13: eliminarDespesa(scanner); break;
-                case 14: inserirPagamento(scanner); break;
-                case 15: listarPagamentos(); break;
-                case 16: eliminarPagamento(scanner); break;
-                case 17: visualizarSaldosGrupo(); break;
-                case 18: sairGrupo(scanner); break;
-                case 0:
+                // Comandos de Grupos
+                case 1 -> criarGrupo(scanner);
+                case 2 -> selecionarGrupo(scanner);
+                case 3 -> listarGrupos();
+                case 4 -> sairGrupo(scanner);
+
+                // Comandos de Convites
+                case 5 -> criarConvite(scanner);
+                case 6 -> listarConvites();
+                case 7 -> aceitarConvite(scanner);
+                case 8 -> recusarConvite(scanner);
+
+                // Comandos de Despesas
+                case 9 -> inserirDespesa(scanner);
+                case 10 -> visualizarTotalGastos();
+                case 11 -> visualizarHistoricoDespesas();
+                case 12 -> exportarDespesasParaCSV();
+                case 13 -> editarDespesa(scanner);
+                case 14 -> eliminarDespesa(scanner);
+
+                // Comandos de Pagamentos
+                case 15 -> inserirPagamento(scanner);
+                case 16 -> listarPagamentos();
+                case 17 -> eliminarPagamento(scanner);
+
+                // Comandos de Saldos e Informações
+                case 18 -> visualizarSaldosGrupo();
+                case 19 -> mostrarInformacoes();
+
+                // Logout
+                case 0 -> {
                     System.out.println("Saindo da conta...");
                     comunicacaoAtual.setUtilizador(null);
                     return;
-                default:
-                    System.out.println("Opção inválida, tente novamente.");
+                }
+
+                // Opção Inválida
+                default -> System.out.println("Opção inválida, tente novamente.");
             }
         }
     }
@@ -140,15 +172,16 @@ public class Cliente {
         String senha = scanner.nextLine();
 
         Utilizador novoUtilizador = new Utilizador(nome, telefone, email, senha);
-        Comunicacao requisicao = new Comunicacao(Comando.REGISTRO, novoUtilizador);
-        Comunicacao resposta = enviarRequisicao(requisicao);
+        comunicacaoAtual.setUtilizador(novoUtilizador);
+        comunicacaoAtual.setComando(Comando.REGISTRO);
 
+        Comunicacao resposta = enviarRequisicao(comunicacaoAtual);
         if (resposta != null) {
-            comunicacaoAtual = resposta;  // Atualiza o estado
+            comunicacaoAtual = resposta;
             System.out.println("Registrado com sucesso.");
             return true;
         } else {
-            System.out.println("Erro ao fazer Registro: " + (resposta != null ? resposta.getMensagemServidor() : "Erro desconhecido"));
+            System.out.println("Erro ao fazer Registro.");
             return false;
         }
     }
@@ -160,11 +193,12 @@ public class Cliente {
         String senha = scanner.nextLine();
 
         Utilizador utilizador = new Utilizador(email, senha);
-        Comunicacao requisicao = new Comunicacao(Comando.AUTENTICACAO, utilizador);
+        comunicacaoAtual.setUtilizador(utilizador);
+        comunicacaoAtual.setComando(Comando.AUTENTICACAO);
 
-        Comunicacao resposta = enviarRequisicao(requisicao);
+        Comunicacao resposta = enviarRequisicao(comunicacaoAtual);
         if (resposta != null && "Autenticado com sucesso".equals(resposta.getMensagemServidor())) {
-            comunicacaoAtual = resposta;  // Atualiza o estado com a resposta
+            comunicacaoAtual = resposta;
             System.out.println("Login realizado com sucesso.");
             return true;
         } else {
@@ -194,25 +228,26 @@ public class Cliente {
         }
     }
 
-    // Métodos para cada opção do menu principal
     private void criarGrupo(Scanner scanner) {
         System.out.print("Nome do grupo: ");
         String nomeGrupo = scanner.nextLine();
-        int idCriador = comunicacaoAtual.getUtilizador().getId();
-        Grupo novoGrupo = new Grupo(nomeGrupo, idCriador);
-        Comunicacao requisicao = new Comunicacao(Comando.CRIACAO_GRUPO, novoGrupo);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setGrupo(new Grupo(nomeGrupo, comunicacaoAtual.getUtilizador().getId()));
+        comunicacaoAtual.setComando(CRIACAO_GRUPO);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void selecionarGrupo(Scanner scanner) {
         System.out.print("Nome do grupo a selecionar: ");
         String nomeGrupo = scanner.nextLine();
 
-        Grupo grupo = new Grupo(nomeGrupo, comunicacaoAtual.getUtilizador().getId());
-        Comunicacao requisicao = new Comunicacao(Comando.SELECIONAR_GRUPO, grupo);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        if (comunicacaoAtual.getGrupo() == null) {
+            comunicacaoAtual.setGrupo(new Grupo());
+        }
+        comunicacaoAtual.getGrupo().setNome(nomeGrupo);
+        comunicacaoAtual.setComando(SELECIONAR_GRUPO);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void criarConvite(Scanner scanner) {
@@ -222,16 +257,18 @@ public class Cliente {
         System.out.print("Email do convidado: ");
         String emailConvidado = scanner.nextLine();
 
+        // Envia o e-mail do convidado e o ID do grupo para o servidor
         Convite convite = new Convite(comunicacaoAtual.getUtilizador().getId(), idGrupo, emailConvidado);
-        Comunicacao requisicao = new Comunicacao(Comando.CRIACAO_CONVITE, convite);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setConvite(convite);
+        comunicacaoAtual.setComando(CRIACAO_CONVITE);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
+
     private void listarConvites() {
-        Comunicacao requisicao = new Comunicacao(Comando.LISTAR_CONVITES, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(LISTAR_CONVITES);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void aceitarConvite(Scanner scanner) {
@@ -240,87 +277,71 @@ public class Cliente {
         int idConvite = scanner.nextInt();
         scanner.nextLine();
 
-        Convite convite = new Convite();
-        convite.setIdConvite(idConvite);
-
-        Comunicacao requisicao = new Comunicacao(Comando.ACEITAR_CONVITE, convite);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
-    }
-
-    private void atualizaComunicacao(Comunicacao resposta) {
-        if (resposta != null) {
-            comunicacaoAtual = resposta;
-            System.out.println("Resposta do servidor: " + resposta.getMensagemServidor());
-        } else {
-            System.out.println("Erro ao receber a resposta do servidor.");
+        if (comunicacaoAtual.getConvite() == null) {
+            comunicacaoAtual.setConvite(new Convite());
         }
+        comunicacaoAtual.getConvite().setIdConvite(idConvite);
+        comunicacaoAtual.setComando(ACEITAR_CONVITE);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
-    // Métodos para cada opção do menu principal
+
     private void recusarConvite(Scanner scanner) {
         System.out.print("ID do convite a recusar: ");
         int idConvite = scanner.nextInt();
         scanner.nextLine();
 
-        Convite convite = new Convite();
-        convite.setIdConvite(idConvite);
-        Comunicacao requisicao = new Comunicacao(Comando.RECUSAR_CONVITE, convite);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        if (comunicacaoAtual.getConvite() == null) {
+            comunicacaoAtual.setConvite(new Convite());
+        }
+        comunicacaoAtual.getConvite().setIdConvite(idConvite);
+        comunicacaoAtual.setComando(RECUSAR_CONVITE);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void listarGrupos() {
-        Comunicacao requisicao = new Comunicacao(Comando.LISTAR_GRUPOS, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(LISTAR_GRUPOS);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void inserirDespesa(Scanner scanner) {
         System.out.print("Nome do grupo: ");
         String nomeGrupo = scanner.nextLine();
-
         System.out.print("Descrição da despesa: ");
         String descricao = scanner.nextLine();
-
         System.out.print("Valor da despesa: ");
         double valor = scanner.nextDouble();
         scanner.nextLine();
 
-        System.out.print("Nome do pagador: ");
-        String nomePagador = scanner.nextLine();
-
-        Grupo grupo = new Grupo();
-        grupo.setNome(nomeGrupo);
+        if (comunicacaoAtual.getGrupo() == null) {
+            comunicacaoAtual.setGrupo(new Grupo());
+        }
+        comunicacaoAtual.getGrupo().setNome(nomeGrupo);
 
         Despesa despesa = new Despesa();
         despesa.setDescricao(descricao);
         despesa.setValor(valor);
         despesa.setIdCriador(comunicacaoAtual.getUtilizador().getId());
+        comunicacaoAtual.setDespesa(despesa);
+        comunicacaoAtual.setComando(INSERIR_DESPESA);
 
-        Comunicacao requisicao = new Comunicacao(Comando.INSERIR_DESPESA, despesa);
-        requisicao.setGrupo(grupo);
-        requisicao.setMensagemServidor(nomePagador);
-
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void visualizarTotalGastos() {
-        Comunicacao requisicao = new Comunicacao(Comando.TOTAL_GASTOS_GRUPO, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(TOTAL_GASTOS_GRUPO);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void visualizarHistoricoDespesas() {
-        Comunicacao requisicao = new Comunicacao(Comando.HISTORICO_DESPESAS, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(HISTORICO_DESPESAS);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void exportarDespesasParaCSV() {
-        Comunicacao requisicao = new Comunicacao(Comando.EXPORTAR_DESPESAS, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(EXPORTAR_DESPESAS);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void editarDespesa(Scanner scanner) {
@@ -334,9 +355,10 @@ public class Cliente {
         scanner.nextLine();
 
         Despesa despesa = new Despesa(idDespesa, descricao, valor);
-        Comunicacao requisicao = new Comunicacao(Comando.EDITAR_DESPESA, despesa);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setDespesa(despesa);
+        comunicacaoAtual.setComando(EDITAR_DESPESA);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void eliminarDespesa(Scanner scanner) {
@@ -346,38 +368,33 @@ public class Cliente {
 
         Despesa despesa = new Despesa();
         despesa.setId(idDespesa);
-        Comunicacao requisicao = new Comunicacao(Comando.ELIMINAR_DESPESA, despesa);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setDespesa(despesa);
+        comunicacaoAtual.setComando(ELIMINAR_DESPESA);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void inserirPagamento(Scanner scanner) {
         System.out.print("Nome do grupo: ");
         String nomeGrupo = scanner.nextLine();
-
         System.out.print("Nome do pagador: ");
         String nomePagador = scanner.nextLine();
-
         System.out.print("Nome do recebedor: ");
         String nomeRecebedor = scanner.nextLine();
-
         System.out.print("Valor: ");
         double valor = scanner.nextDouble();
         scanner.nextLine();
 
-        String data = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        Pagamento pagamento = new Pagamento(nomeGrupo, nomePagador, nomeRecebedor, LocalDate.now().toString(), valor);
+        comunicacaoAtual.setPagamento(pagamento);
+        comunicacaoAtual.setComando(INSERIR_PAGAMENTO);
 
-        Pagamento pagamento = new Pagamento(nomeGrupo, nomePagador, nomeRecebedor, data, valor);
-        Comunicacao requisicao = new Comunicacao(Comando.INSERIR_PAGAMENTO, pagamento);
-
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void listarPagamentos() {
-        Comunicacao requisicao = new Comunicacao(Comando.LISTAR_PAGAMENTOS, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(LISTAR_PAGAMENTOS);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void eliminarPagamento(Scanner scanner) {
@@ -387,15 +404,15 @@ public class Cliente {
 
         Pagamento pagamento = new Pagamento();
         pagamento.setIdPagamento(idPagamento);
-        Comunicacao requisicao = new Comunicacao(Comando.ELIMINAR_PAGAMENTO, pagamento);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setPagamento(pagamento);
+        comunicacaoAtual.setComando(ELIMINAR_PAGAMENTO);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void visualizarSaldosGrupo() {
-        Comunicacao requisicao = new Comunicacao(Comando.SALDOS_GRUPO, comunicacaoAtual.getUtilizador());
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        comunicacaoAtual.setComando(SALDOS_GRUPO);
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
     }
 
     private void sairGrupo(Scanner scanner) {
@@ -403,11 +420,26 @@ public class Cliente {
         int idGrupo = scanner.nextInt();
         scanner.nextLine();
 
-        Grupo grupo = new Grupo();
-        grupo.setIdGrupo(idGrupo);
-        Comunicacao requisicao = new Comunicacao(Comando.SAIR_GRUPO, grupo);
-        Comunicacao resposta = enviarRequisicao(requisicao);
-        atualizaComunicacao(resposta);
+        if (comunicacaoAtual.getGrupo() == null) {
+            comunicacaoAtual.setGrupo(new Grupo());
+        }
+        comunicacaoAtual.getGrupo().setIdGrupo(idGrupo);
+        comunicacaoAtual.setComando(SAIR_GRUPO);
+
+        atualizaComunicacao(enviarRequisicao(comunicacaoAtual));
+    }
+    private void mostrarInformacoes() {
+        System.out.println(comunicacaoAtual.mostrarInformacoes());
+    }
+
+
+    private void atualizaComunicacao(Comunicacao resposta) {
+        if (resposta != null) {
+            comunicacaoAtual = resposta;
+            System.out.println("Resposta do servidor: " + resposta.getMensagemServidor());
+        } else {
+            System.out.println("Erro ao receber a resposta do servidor.");
+        }
     }
 
     public static void main(String[] args) {

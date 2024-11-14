@@ -59,7 +59,7 @@ public class ClienteHandler implements Runnable {
     }
 
     private Comunicacao processarRequisicao(Comunicacao requisicao) {
-        return switch (requisicao.getComando()) {
+        switch (requisicao.getComando()) {
             case REGISTRO -> registrarUtilizador(requisicao);
             case AUTENTICACAO -> autenticarUtilizador(requisicao);
             case EDICAO_DADOS -> editarDadosUtilizador(requisicao);
@@ -81,115 +81,164 @@ public class ClienteHandler implements Runnable {
             case ELIMINAR_DESPESA -> eliminarDespesa(requisicao);
             case ELIMINAR_PAGAMENTO -> eliminarPagamento(requisicao);
             case EXPORTAR_DESPESAS -> exportarDespesasParaCSV(requisicao);
-            default -> new Comunicacao(Comunicacao.Comando.valueOf(requisicao.getComando().name()), "Comando desconhecido");
-        };
+            default -> requisicao.setMensagemServidor("Comando desconhecido");
+        }
+        return requisicao;
     }
 
-    private Comunicacao registrarUtilizador(Comunicacao requisicao) {
+    private void registrarUtilizador(Comunicacao requisicao) {
         Utilizador utilizador = requisicao.getUtilizador();
         boolean sucesso = utilizadorService.registrarUtilizador(utilizador.getNome(), utilizador.getTelefone(), utilizador.getEmail(), utilizador.getPassword());
 
         String mensagem = sucesso ? "Registro realizado com sucesso" : "Erro no registro ou email já existente";
-        Comunicacao resposta = new Comunicacao(Comunicacao.Comando.REGISTRO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
 
-        // Inclui o Utilizador registrado na resposta
         if (sucesso) {
             Utilizador utilizadorRegistrado = utilizadorService.buscarUtilizadorPorEmail(utilizador.getEmail());
-            resposta.setUtilizador(utilizadorRegistrado);
+            requisicao.setUtilizador(utilizadorRegistrado);
         }
-
-        return resposta;
     }
-    private Comunicacao autenticarUtilizador(Comunicacao requisicao) {
+
+    private void autenticarUtilizador(Comunicacao requisicao) {
         Utilizador utilizador = requisicao.getUtilizador();
         boolean autenticado = utilizadorService.autenticarUtilizador(utilizador.getEmail(), utilizador.getPassword());
-        Comunicacao resposta;
 
         if (autenticado) {
             Utilizador utilizadorAutenticado = utilizadorService.buscarUtilizadorPorEmail(utilizador.getEmail());
             nomeCliente = utilizadorAutenticado.getNome();
-
-            // Cria a resposta com o Utilizador autenticado
-            resposta = new Comunicacao(Comunicacao.Comando.AUTENTICACAO, "Autenticado com sucesso");
-            resposta.setUtilizador(utilizadorAutenticado);
+            requisicao.setMensagemServidor("Autenticado com sucesso");
+            requisicao.setUtilizador(utilizadorAutenticado);
         } else {
-            resposta = new Comunicacao(Comunicacao.Comando.AUTENTICACAO, "Falha na autenticação");
+            requisicao.setMensagemServidor("Falha na autenticação");
         }
-
-        return resposta;
     }
 
-    private Comunicacao editarDadosUtilizador(Comunicacao requisicao) {
+    private void editarDadosUtilizador(Comunicacao requisicao) {
         Utilizador utilizador = requisicao.getUtilizador();
         boolean sucesso = utilizadorService.editarPerfil(utilizador.getId(), utilizador.getNome(), utilizador.getTelefone(), utilizador.getEmail(), utilizador.getPassword());
 
         String mensagem = sucesso ? "Perfil atualizado com sucesso" : "Erro ao atualizar perfil";
-        return new Comunicacao(Comunicacao.Comando.EDICAO_DADOS, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao criarGrupo(Comunicacao requisicao) {
+    private void criarGrupo(Comunicacao requisicao) {
         Grupo grupo = requisicao.getGrupo();
-        System.out.println("grupo:"+grupo.getNome()+"IDCRIADOR_"+grupo.getIdCriador());
         boolean sucesso = grupoService.criarGrupo(grupo.getNome(), grupo.getIdCriador());
 
         String mensagem = sucesso ? "Grupo criado com sucesso" : "Erro ao criar grupo ou nome já existente";
-        return new Comunicacao(Comunicacao.Comando.CRIACAO_GRUPO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao selecionarGrupo(Comunicacao requisicao) {
-        Grupo grupo = requisicao.getGrupo();
-        Grupo grupoSelecionado = grupoService.selecionarGrupoCorrente(grupo.getIdCriador(), grupo.getIdGrupo());
 
-        String mensagem = (grupoSelecionado != null) ? "Grupo selecionado com sucesso" : "Erro ao selecionar grupo";
-        return new Comunicacao(Comunicacao.Comando.SELECIONAR_GRUPO, mensagem);
+    private void selecionarGrupo(Comunicacao requisicao) {
+        String nomeGrupo = requisicao.getGrupo().getNome();
+        int idUtilizador = requisicao.getUtilizador().getId();
+
+        // Busca o grupo pelo nome e verifica se o utilizador é membro
+        Grupo grupoSelecionado = grupoService.selecionarGrupoCorrente(idUtilizador, nomeGrupo);
+
+        String mensagem = (grupoSelecionado != null) ? "Grupo selecionado com sucesso" : "Erro ao selecionar grupo ou permissão negada.";
+        requisicao.setMensagemServidor(mensagem);
+
+        // Atualiza o objeto requisicao com o grupo encontrado, se ele existir
+        if (grupoSelecionado != null) {
+            requisicao.setGrupo(grupoSelecionado);
+        }
     }
 
-    private Comunicacao enviarConvite(Comunicacao requisicao) {
+
+    private void enviarConvite(Comunicacao requisicao) {
         Convite convite = requisicao.getConvite();
+
+        // Buscar o ID do utilizador convidado pelo e-mail fornecido
+        Utilizador utilizadorConvidado = utilizadorService.buscarUtilizadorPorEmail(convite.getEmailConvidado());
+        if (utilizadorConvidado == null) {
+            requisicao.setMensagemServidor("Erro: Utilizador convidado não encontrado.");
+            return;
+        }
+
+        // Define o ID do utilizador convidado no convite
+        convite.setIdUtilizadorConvidado(utilizadorConvidado.getId());
+
+        // Verifica se o utilizador que está enviando o convite é membro do grupo
         boolean sucesso = utilizadorService.enviarConvite(convite.getIdUtilizadorConvite(), convite.getIdGrupo(), convite.getIdUtilizadorConvidado());
 
         String mensagem = sucesso ? "Convite enviado com sucesso" : "Erro ao enviar convite ou convite já existente";
-        return new Comunicacao(Comunicacao.Comando.CRIACAO_CONVITE, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao listarConvitesPendentes(Comunicacao requisicao) {
+
+    private void listarConvitesPendentes(Comunicacao requisicao) {
         int idUtilizador = requisicao.getUtilizador().getId();
         List<Convite> convitesPendentes = utilizadorService.visualizarConvitesPendentes(idUtilizador);
 
-        return new Comunicacao(Comunicacao.Comando.LISTAR_CONVITES, convitesPendentes.isEmpty() ? "Nenhum convite pendente" : convitesPendentes.toString());
+        requisicao.setMensagemServidor(convitesPendentes.isEmpty() ? "Nenhum convite pendente" : convitesPendentes.toString());
     }
 
-    private Comunicacao aceitarConvite(Comunicacao requisicao) {
+    private void aceitarConvite(Comunicacao requisicao) {
         int idConvite = requisicao.getConvite().getIdConvite();
-        boolean sucesso = utilizadorService.aceitarConvite(idConvite);
 
-        String mensagem = sucesso ? "Convite aceito com sucesso" : "Erro ao aceitar convite";
-        return new Comunicacao(Comunicacao.Comando.ACEITAR_CONVITE, mensagem);
+        // Atualiza o estado do convite para "aceito"
+        boolean conviteAceito = utilizadorService.aceitarConvite(idConvite);
+
+        // Verifica se o convite foi aceito com sucesso
+        if (conviteAceito) {
+            // Recupera o convite aceito para obter o idGrupo e o idUtilizadorConvidado
+            Convite convite = utilizadorService.buscarConvitePorId(idConvite);
+
+            if (convite != null) {
+                int idGrupo = convite.getIdGrupo();
+                int idUtilizador = convite.getIdUtilizadorConvidado();
+
+                // Adiciona o utilizador ao grupo
+                boolean adicionadoAoGrupo = grupoService.adicionarUtilizadorAoGrupo(idUtilizador, idGrupo);
+
+                // Define a mensagem de acordo com o sucesso da operação
+                String mensagem = adicionadoAoGrupo ? "Convite aceito e utilizador adicionado ao grupo com sucesso." : "Convite aceito, mas houve um erro ao adicionar o utilizador ao grupo.";
+                requisicao.setMensagemServidor(mensagem);
+            } else {
+                requisicao.setMensagemServidor("Erro: Convite não encontrado.");
+            }
+        } else {
+            requisicao.setMensagemServidor("Erro ao aceitar convite");
+        }
     }
 
-    private Comunicacao recusarConvite(Comunicacao requisicao) {
+
+    private void recusarConvite(Comunicacao requisicao) {
         int idConvite = requisicao.getConvite().getIdConvite();
         boolean sucesso = utilizadorService.recusarConvite(idConvite);
 
         String mensagem = sucesso ? "Convite recusado com sucesso" : "Erro ao recusar convite";
-        return new Comunicacao(Comunicacao.Comando.RECUSAR_CONVITE, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao listarGruposDoUtilizador(Comunicacao requisicao) {
+    private void listarGruposDoUtilizador(Comunicacao requisicao) {
         int idUtilizador = requisicao.getUtilizador().getId();
         List<Grupo> grupos = grupoService.listarGruposDoUtilizador(idUtilizador);
 
-        return new Comunicacao(Comunicacao.Comando.LISTAR_GRUPOS, grupos.isEmpty() ? "Nenhum grupo encontrado" : grupos.toString());
+        if (grupos.isEmpty()) {
+            requisicao.setMensagemServidor("Nenhum grupo encontrado");
+        } else {
+            // Formatar a lista de grupos para exibir apenas os nomes
+            StringBuilder listaGrupos = new StringBuilder("Grupos:\n");
+            for (Grupo grupo : grupos) {
+                listaGrupos.append(" - ").append(grupo.getNome()).append("\n");
+            }
+            requisicao.setMensagemServidor(listaGrupos.toString());
+        }
     }
 
-    private Comunicacao inserirDespesa(Comunicacao requisicao) {
+
+    private void inserirDespesa(Comunicacao requisicao) {
         Despesa despesa = requisicao.getDespesa();
         List<String> nomesParticipantes = requisicao.getNomesParticipantes();
 
         List<Integer> idsParticipantes = grupoService.obterIdsPorNomesNoGrupo(despesa.getIdGrupo(), nomesParticipantes);
 
         if (idsParticipantes.size() != nomesParticipantes.size()) {
-            return new Comunicacao(Comunicacao.Comando.INSERIR_DESPESA, "Erro: Alguns participantes não estão no grupo.");
+            requisicao.setMensagemServidor("Erro: Alguns participantes não estão no grupo.");
+            return;
         }
 
         boolean sucesso = despesaService.inserirDespesa(
@@ -202,26 +251,26 @@ public class ClienteHandler implements Runnable {
         );
 
         String mensagem = sucesso ? "Despesa inserida com sucesso" : "Erro ao inserir despesa";
-        return new Comunicacao(Comunicacao.Comando.INSERIR_DESPESA, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao calcularTotalGastosGrupo(Comunicacao requisicao) {
+    private void calcularTotalGastosGrupo(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         double totalGastos = despesaService.calcularTotalGastosGrupo(idGrupo);
 
         String mensagem = String.format("Total de gastos do grupo: %.2f", totalGastos);
-        return new Comunicacao(Comunicacao.Comando.TOTAL_GASTOS_GRUPO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao listarHistoricoDespesas(Comunicacao requisicao) {
+    private void listarHistoricoDespesas(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         List<Despesa> historicoDespesas = despesaService.visualizarHistoricoDespesas(idGrupo);
 
         String mensagem = historicoDespesas.isEmpty() ? "Nenhuma despesa encontrada" : historicoDespesas.toString();
-        return new Comunicacao(Comunicacao.Comando.HISTORICO_DESPESAS, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao inserirPagamento(Comunicacao requisicao) {
+    private void inserirPagamento(Comunicacao requisicao) {
         Pagamento pagamento = requisicao.getPagamento();
         boolean sucesso = pagamentoService.registrarPagamento(
                 pagamento.getIdGrupo(),
@@ -231,33 +280,32 @@ public class ClienteHandler implements Runnable {
         );
 
         String mensagem = sucesso ? "Pagamento registrado com sucesso" : "Erro ao registrar pagamento";
-        return new Comunicacao(Comunicacao.Comando.INSERIR_PAGAMENTO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao listarPagamentosGrupo(Comunicacao requisicao) {
+    private void listarPagamentosGrupo(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         List<Pagamento> pagamentos = pagamentoService.listarPagamentosDoGrupo(idGrupo);
 
-        String mensagem = pagamentos.isEmpty() ? "Nenhum pagamento encontrado" : pagamentos.toString();
-        return new Comunicacao(Comunicacao.Comando.LISTAR_PAGAMENTOS, mensagem);
+        requisicao.setMensagemServidor(pagamentos.isEmpty() ? "Nenhum pagamento encontrado" : pagamentos.toString());
     }
 
-    private Comunicacao visualizarSaldosGrupo(Comunicacao requisicao) {
+    private void visualizarSaldosGrupo(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         List<String> relatorioSaldos = new SaldoService(connection).gerarRelatorioSaldos(idGrupo);
 
-        String mensagem = relatorioSaldos.isEmpty() ? "Nenhum saldo encontrado" : String.join("\n", relatorioSaldos);
-        return new Comunicacao(Comunicacao.Comando.SALDOS_GRUPO, mensagem);
+        requisicao.setMensagemServidor(relatorioSaldos.isEmpty() ? "Nenhum saldo encontrado" : String.join("\n", relatorioSaldos));
     }
 
-    private Comunicacao editarDespesa(Comunicacao requisicao) {
+    private void editarDespesa(Comunicacao requisicao) {
         Despesa despesa = requisicao.getDespesa();
         List<String> nomesParticipantes = requisicao.getNomesParticipantes();
 
         List<Integer> idsValidos = grupoService.obterIdsPorNomesNoGrupo(despesa.getIdGrupo(), nomesParticipantes);
 
         if (idsValidos.size() != nomesParticipantes.size()) {
-            return new Comunicacao(Comunicacao.Comando.EDITAR_DESPESA, "Erro: Alguns participantes não estão no grupo.");
+            requisicao.setMensagemServidor("Erro: Alguns participantes não estão no grupo.");
+            return;
         }
 
         boolean sucesso = despesaService.editarDespesa(
@@ -268,42 +316,42 @@ public class ClienteHandler implements Runnable {
         );
 
         String mensagem = sucesso ? "Despesa editada com sucesso" : "Erro ao editar despesa";
-        return new Comunicacao(Comunicacao.Comando.EDITAR_DESPESA, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao eliminarDespesa(Comunicacao requisicao) {
+    private void eliminarDespesa(Comunicacao requisicao) {
         int idDespesa = requisicao.getDespesa().getId();
         boolean sucesso = despesaService.eliminarDespesa(idDespesa);
 
         String mensagem = sucesso ? "Despesa eliminada com sucesso" : "Erro ao eliminar despesa";
-        return new Comunicacao(Comunicacao.Comando.ELIMINAR_DESPESA, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao eliminarPagamento(Comunicacao requisicao) {
+    private void eliminarPagamento(Comunicacao requisicao) {
         int idPagamento = requisicao.getPagamento().getIdPagamento();
         boolean sucesso = pagamentoService.eliminarPagamento(idPagamento);
 
         String mensagem = sucesso ? "Pagamento eliminado com sucesso" : "Erro ao eliminar pagamento";
-        return new Comunicacao(Comunicacao.Comando.ELIMINAR_PAGAMENTO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao exportarDespesasParaCSV(Comunicacao requisicao) {
+    private void exportarDespesasParaCSV(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         String caminhoArquivo = "despesas_grupo_" + idGrupo + ".csv";
         boolean sucesso = despesaService.exportarDespesasParaCSV(idGrupo, caminhoArquivo);
 
         String mensagem = sucesso ? "Despesas exportadas com sucesso para " + caminhoArquivo : "Erro ao exportar despesas";
-        return new Comunicacao(Comunicacao.Comando.EXPORTAR_DESPESAS, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
-    private Comunicacao sairGrupo(Comunicacao requisicao) {
+    private void sairGrupo(Comunicacao requisicao) {
         int idGrupo = requisicao.getGrupo().getIdGrupo();
         int idUtilizador = requisicao.getUtilizador().getId();
 
         boolean sucesso = grupoService.sairDoGrupo(idGrupo, idUtilizador);
 
         String mensagem = sucesso ? "Você saiu do grupo com sucesso" : "Erro ao sair do grupo. Verifique se não há despesas associadas.";
-        return new Comunicacao(Comunicacao.Comando.SAIR_GRUPO, mensagem);
+        requisicao.setMensagemServidor(mensagem);
     }
 
     private void encerrarConexao() {

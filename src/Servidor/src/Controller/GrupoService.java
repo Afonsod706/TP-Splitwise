@@ -30,10 +30,13 @@ public class GrupoService {
                 return false;
             }
         }
-        System.out.println("Adiciona ao grupo " + nomeGrupo);
-        // Cria o grupo e adiciona o criador como membro
-        Grupo novoGrupo = new Grupo(0, nomeGrupo, idCriador);
+
+        // Cria o grupo com o nome e o id do criador
+        Grupo novoGrupo = new Grupo(nomeGrupo, idCriador);
+
+        // Persistindo o grupo no banco de dados e atualizando o ID
         if (grupoCRUD.criarGrupo(novoGrupo)) {
+            // Usa o ID atualizado de novoGrupo para adicionar o criador como membro
             return utilizadorGrupoCRUD.adicionarMembro(novoGrupo.getIdGrupo(), idCriador);
         }
         return false;
@@ -71,15 +74,24 @@ public class GrupoService {
     }
 
     // 5. Método para selecionar o grupo corrente
-    public Grupo selecionarGrupoCorrente(int idUtilizador, int idGrupo) {
-        // Verifica se o utilizador é membro do grupo
-        if (utilizadorGrupoCRUD.verificarMembro(idGrupo, idUtilizador)) {
-            return grupoCRUD.lerGrupoPorId(idGrupo);
+    public Grupo selecionarGrupoCorrente(int idUtilizador, String nomeGrupo) {
+        // Busca o grupo pelo nome
+        Grupo grupo = grupoCRUD.obterGrupoPorNome(nomeGrupo);
+
+        if (grupo != null) {
+            // Verifica se o utilizador é membro do grupo encontrado
+            boolean isMembro = utilizadorGrupoCRUD.verificarMembro(grupo.getIdGrupo(), idUtilizador);
+            if (isMembro) {
+                return grupo; // Retorna o grupo se o utilizador for membro
+            } else {
+                System.out.println("Permissão negada. Apenas membros podem acessar o grupo.");
+            }
         } else {
-            System.out.println("Permissão negada. Apenas membros podem acessar o grupo.");
-            return null;
+            System.out.println("Grupo não encontrado.");
         }
+        return null;
     }
+
 
     // Método para permitir que um utilizador saia de um grupo, se não houver despesas associadas
     public boolean sairDoGrupo(int idGrupo, int idUtilizador) {
@@ -102,4 +114,16 @@ public class GrupoService {
         }
         return ids;
     }
+
+    public boolean adicionarUtilizadorAoGrupo(int idUtilizador, int idGrupo) {
+        // Verifica se o utilizador já é membro do grupo
+        if (utilizadorGrupoCRUD.verificarMembro(idGrupo, idUtilizador)) {
+            System.out.println("O utilizador já é membro do grupo.");
+            return false;
+        }
+
+        // Adiciona o utilizador ao grupo
+        return utilizadorGrupoCRUD.associarUtilizadorAGrupo(idUtilizador, idGrupo);
+    }
+
 }

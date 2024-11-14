@@ -62,12 +62,13 @@ public class UtilizadorGrupoCRUD {
             pstmt.setInt(1, idGrupo);
             pstmt.setInt(2, idUtilizador);
             ResultSet rs = pstmt.executeQuery();
-            return rs.next(); // Retorna true se encontrar o utilizador no grupo, false caso contrário
+            return rs.next(); // Retorna true se encontrar o utilizador no grupo
         } catch (SQLException e) {
             e.printStackTrace();
-            return false;
         }
+        return false;
     }
+
 
     // Verifica se há dívidas pendentes em um grupo
     public boolean verificarDividasPendentes(int idGrupo) {
@@ -83,7 +84,15 @@ public class UtilizadorGrupoCRUD {
     }
 
     public boolean adicionarMembro(int idGrupo, int idCriador) {
-        return false;
+        String sql = "INSERT INTO utilizador_grupo (id_utilizador, id_grupo, gasto_total, valor_devido, valor_a_receber) VALUES (?, ?, 0, 0, 0)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idCriador);
+            pstmt.setInt(2, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     // Lista todos os grupos aos quais um utilizador pertence
@@ -108,6 +117,7 @@ public class UtilizadorGrupoCRUD {
         }
         return grupos;
     }
+
 
     // Remove um membro específico de um grupo
     public boolean removerMembro(int idGrupo, int idUtilizador) {

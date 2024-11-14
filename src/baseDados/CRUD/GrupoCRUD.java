@@ -105,4 +105,20 @@ public class GrupoCRUD {
         }
         return grupos;
     }
+
+    public Grupo obterGrupoPorNome(String nomeGrupo) {
+        String sql = "SELECT * FROM Grupo WHERE nome = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, nomeGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                // Retorna um objeto Grupo com os dados encontrados
+                return new Grupo(rs.getInt("id_grupo"), rs.getString("nome"), rs.getInt("id_criador"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
 }

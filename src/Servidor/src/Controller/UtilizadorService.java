@@ -65,6 +65,7 @@ public class UtilizadorService {
 
     // 4. Método para enviar convite para um grupo
     public boolean enviarConvite(int idUtilizadorConvite, int idGrupo, int idUtilizadorConvidado) {
+
         // Verifica se o convite já existe para o mesmo grupo e utilizador
         List<Convite> convitesExistentes = conviteCRUD.listarConvitesPorGrupo(idGrupo);
         for (Convite convite : convitesExistentes) {
@@ -81,7 +82,7 @@ public class UtilizadorService {
 
     // 5. Método para visualizar convites pendentes de um utilizador
     public List<Convite> visualizarConvitesPendentes(int idUtilizador) {
-        return conviteCRUD.listarConvitesPorUtilizador(idUtilizador, "pendente");
+        return conviteCRUD.listarTodosConvitesPorUtilizador(idUtilizador);
     }
 
     // 6. Método para aceitar um convite
@@ -97,6 +98,10 @@ public class UtilizadorService {
     // Método para buscar um utilizador pelo email
     public Utilizador buscarUtilizadorPorEmail(String email) {
         return utilizadorCRUD.lerUtilizadorPorEmail(email);
+    }
+
+    public Convite buscarConvitePorId(int idConvite) {
+        return conviteCRUD.buscarConvitePorId(idConvite);
     }
 }
 
