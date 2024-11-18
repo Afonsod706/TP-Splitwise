@@ -37,6 +37,7 @@ public class Servidor {
             System.err.println("Erro no servidor: " + e.getMessage());
         } finally {
             desconectarTodosClientes();
+            gestorBaseDados.limparDadosTeste();
         }
     }
 

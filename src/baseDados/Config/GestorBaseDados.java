@@ -17,6 +17,7 @@ public class GestorBaseDados {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
+            inserirDadosTeste();
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
         }
@@ -191,4 +192,61 @@ public class GestorBaseDados {
             System.out.println("Erro ao fechar a conexão: " + e.getMessage());
         }
     }
+
+    public void inserirDadosTeste() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados2.db");
+             Statement stmt = conn.createStatement()) {
+
+            // Limpar dados anteriores
+            stmt.execute("DELETE FROM utilizador_grupo;");
+            stmt.execute("DELETE FROM Grupo;");
+            stmt.execute("DELETE FROM Utilizador;");
+
+            // Inserir utilizadores
+            stmt.execute("""
+            INSERT INTO Utilizador (id_utilizador, nome, telefone, email, password) VALUES
+            (1, 'João', '912345678', 'joao@example.com', 'senha123'),
+            (2, 'Maria', '912345679', 'maria@example.com', 'senha123'),
+            (3, 'Pedro', '912345670', 'pedro@example.com', 'senha123');
+        """);
+
+            // Inserir grupos
+            stmt.execute("""
+            INSERT INTO Grupo (id_grupo, nome, data_criacao, id_criador) VALUES
+            (1, 'Grupo1', '2024-11-20', 1),
+            (2, 'Grupo2', '2024-11-20', 2);
+        """);
+
+            // Inserir associação de utilizadores aos grupos
+            stmt.execute("""
+            INSERT INTO utilizador_grupo (id_utilizador, id_grupo, gasto_total, valor_devido, valor_a_receber) VALUES
+            (1, 1, 100.00, 0.00, 50.00), -- João deve receber 50
+            (2, 1, 50.00, 50.00, 0.00),  -- Maria deve 50
+            (3, 1, 0.00, 0.00, 0.00),   -- Pedro não tem saldos
+            (1, 2, 0.00, 0.00, 0.00),   -- João pertence ao Grupo2 sem saldo
+            (2, 2, 20.00, 0.00, 0.00);  -- Maria tem gasto no Grupo2, mas sem dívidas
+        """);
+
+            System.out.println("Dados de teste inseridos com sucesso.");
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao inserir dados de teste: " + e.getMessage());
+        }
+    }
+    public void limparDadosTeste() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados2.db");
+             Statement stmt = conn.createStatement()) {
+
+            // Limpar dados inseridos
+            stmt.execute("DELETE FROM utilizador_grupo;");
+            stmt.execute("DELETE FROM Grupo;");
+            stmt.execute("DELETE FROM Utilizador;");
+
+            System.out.println("Dados de teste removidos com sucesso.");
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao limpar dados de teste: " + e.getMessage());
+        }
+    }
+
 }
