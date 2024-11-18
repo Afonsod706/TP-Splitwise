@@ -1,42 +1,96 @@
 package Cliente.src.Network;
 
+import Cliente.src.View.ClienteVista;
 import Cliente.src.recursos.Comunicacao;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClienteComunicacao {
+    private final String serverAddress;
+    private final int serverPort;
     private Socket socket;
-    private ObjectOutputStream out;
-    private ObjectInputStream in;
+//    private BufferedReader in;
+//    private PrintWriter out;
+    private ObjectInputStream inObj;
+    private ObjectOutputStream outObj;
+    private Thread receiverThread;
+    private final AtomicBoolean running = new AtomicBoolean(true);
 
-    public ClienteComunicacao(String serverAddress, int serverPort) throws IOException {
-        socket = new Socket(serverAddress, serverPort);
-        out = new ObjectOutputStream(socket.getOutputStream());
-        in = new ObjectInputStream(socket.getInputStream());
+    public ClienteComunicacao(String serverAddress, int serverPort) {
+        this.serverAddress = serverAddress;
+        this.serverPort = serverPort;
     }
 
-    public Comunicacao enviarComando(Comunicacao comunicacao) throws IOException {
+    // Inicia a conexão com o servidor
+    public boolean conectar() {
         try {
-            out.writeObject(comunicacao);
-            out.flush();
-
-            // Recebe a resposta do servidor
-            return (Comunicacao) in.readObject();
-        } catch (ClassNotFoundException e) {
-            System.out.println("Erro ao enviar comando: " + e.getMessage());
-            return null;
+            socket = new Socket(serverAddress, serverPort);
+            outObj = new ObjectOutputStream(socket.getOutputStream()); // OutputStream primeiro
+            outObj.flush(); // Garante que o cabeçalho é enviado
+            inObj = new ObjectInputStream(socket.getInputStream()); // InputStream depois
+            return true;
+        } catch (IOException e) {
+            System.err.println("Erro ao conectar ao servidor: " + e.getMessage());
+            return false;
         }
     }
 
-    // Fecha a conexão com o servidor
-    public void closeConnection() {
+
+
+    // Inicia a thread de recepção de mensagens
+    public void iniciarRecebimento(ClienteVista vista) {
+        ClienteRecebedor recebedor = new ClienteRecebedor(inObj, vista, running);
+        receiverThread = new Thread(recebedor);
+        receiverThread.start();
+    }
+
+    // Envia uma mensagem ao servidor
+    public void enviarMensagem(Comunicacao comunicacao) {
         try {
-            socket.close();
+            outObj.writeObject(comunicacao); // Envia o objeto ao servidor
+            outObj.flush();
+            System.out.println("Apos envidou Comando:"+comunicacao.getComando());
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Erro ao enviar pedido: " + e.getMessage());
+        }
+    }
+
+
+    // Recebe uma mensagem sincronamente (opcional)
+//    public String receberMensagem() {
+//        try {
+//            return (String) inObj.readObject();
+//        } catch (IOException | ClassNotFoundException e) {
+//            System.err.println("Erro ao receber mensagem do servidor: " + e.getMessage());
+//            return null;
+//        }
+//    }
+
+
+
+    public void enviarObjeto(Object obj) {
+        try{
+            outObj.writeObject(obj);
+            outObj.flush();
+
+        } catch (IOException e) {
+            System.err.println("Erro ao enviar objeto: " + e.getMessage());
+        }
+    }
+    // Encerra a conexão com o servidor
+    public void encerrar() {
+        running.set(false);
+        try {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+            if (receiverThread != null) {
+                receiverThread.interrupt();
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao encerrar conexão: " + e.getMessage());
         }
     }
 }

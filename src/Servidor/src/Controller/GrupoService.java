@@ -21,26 +21,26 @@ public class GrupoService {
     }
 
     // 1. Método para criar um novo grupo e adicionar o criador como membro
-    public boolean criarGrupo(String nomeGrupo, int idCriador) {
-        // Verifica se o nome do grupo já existe
-        List<Grupo> grupos = grupoCRUD.listarGrupos();
-        for (Grupo grupo : grupos) {
-            if (grupo.getNome().equals(nomeGrupo)) {
-                System.out.println("Nome do grupo já existe.");
-                return false;
-            }
-        }
-
-        // Cria o grupo com o nome e o id do criador
-        Grupo novoGrupo = new Grupo(nomeGrupo, idCriador);
-
-        // Persistindo o grupo no banco de dados e atualizando o ID
-        if (grupoCRUD.criarGrupo(novoGrupo)) {
-            // Usa o ID atualizado de novoGrupo para adicionar o criador como membro
-            return utilizadorGrupoCRUD.adicionarMembro(novoGrupo.getIdGrupo(), idCriador);
-        }
-        return false;
-    }
+//    public boolean criarGrupo(String nomeGrupo, int idCriador) {
+//        // Verifica se o nome do grupo já existe
+//        List<Grupo> grupos = grupoCRUD.listarGrupos(utilizadorAutenticado.getId());
+//        for (Grupo grupo : grupos) {
+//            if (grupo.getNome().equals(nomeGrupo)) {
+//                System.out.println("Nome do grupo já existe.");
+//                return false;
+//            }
+//        }
+//
+//        // Cria o grupo com o nome e o id do criador
+//        Grupo novoGrupo = new Grupo(nomeGrupo, idCriador);
+//
+//        // Persistindo o grupo no banco de dados e atualizando o ID
+//        if (grupoCRUD.criarGrupo(novoGrupo)) {
+//            // Usa o ID atualizado de novoGrupo para adicionar o criador como membro
+//            return utilizadorGrupoCRUD.adicionarMembro(novoGrupo.getIdGrupo(), idCriador);
+//        }
+//        return false;
+//    }
 
     // 2. Método para editar o nome de um grupo
     public boolean editarNomeGrupo(int idGrupo, int idUtilizador, String novoNome) {
@@ -124,6 +124,27 @@ public class GrupoService {
 
         // Adiciona o utilizador ao grupo
         return utilizadorGrupoCRUD.associarUtilizadorAGrupo(idUtilizador, idGrupo);
+    }
+
+    // Método para buscar um grupo por nome, verificando se o utilizador é membro
+    public Grupo buscarGrupoPorNome(String nomeGrupo, int idUtilizador) {
+        Grupo grupo = grupoCRUD.obterGrupoPorNome(nomeGrupo);
+        if (grupo != null) {
+            boolean isMembro = utilizadorGrupoCRUD.verificarMembro(grupo.getIdGrupo(), idUtilizador);
+            if (isMembro) {
+                return grupo;
+            } else {
+                System.out.println("Permissão negada. O utilizador não é membro deste grupo.");
+                return null;
+            }
+        }
+        System.out.println("Erro: Grupo não encontrado.");
+        return null;
+    }
+
+    public String obterNomeGrupoPorId(int idGrupo) {
+        Grupo grupo = grupoCRUD.lerGrupoPorId(idGrupo);
+        return grupo != null ? grupo.getNome() : "Desconhecido";
     }
 
 }

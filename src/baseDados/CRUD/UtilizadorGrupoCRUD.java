@@ -148,4 +148,52 @@ public class UtilizadorGrupoCRUD {
         }
         return null;
     }
+
+    public boolean verificarSaldoGrupo(int idGrupo) {
+        String sql = "SELECT SUM(valor_devido) AS total_devido, SUM(valor_a_receber) AS total_a_receber " +
+                "FROM utilizador_grupo WHERE id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                double totalDevido = rs.getDouble("total_devido");
+                double totalReceber = rs.getDouble("total_a_receber");
+                // O grupo só pode ser eliminado se não houver valores pendentes para qualquer membro
+                return totalDevido == 0 && totalReceber == 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false; // Retorna falso se houver erro ou se as condições não forem atendidas
+    }
+
+
+    public boolean removerAssociacoesGrupo(int idGrupo) {
+        String sql = "DELETE FROM utilizador_grupo WHERE id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public boolean verificarSaldoUtilizador(int idGrupo, int idUtilizador) {
+        String sql = "SELECT valor_devido, valor_a_receber FROM utilizador_grupo WHERE id_grupo = ? AND id_utilizador = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo);
+            pstmt.setInt(2, idUtilizador);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                double valorDevido = rs.getDouble("valor_devido");
+                double valorReceber = rs.getDouble("valor_a_receber");
+                return valorDevido == 0 && valorReceber == 0; // Saldo zerado
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
 }

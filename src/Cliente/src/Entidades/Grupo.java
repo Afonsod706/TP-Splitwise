@@ -24,7 +24,8 @@ public class Grupo implements Serializable {
         this.idCriador = idCriador;
     }
 
-    public Grupo() {
+    public Grupo(String nomeGrupo) {
+        this.nome = nomeGrupo;
 
     }
 
@@ -59,6 +60,7 @@ public class Grupo implements Serializable {
     public int getIdGrupo() {
         return idGrupo;
     }
+
     @Override
     public String toString() {
         return "Grupo{" +

@@ -1,52 +1,61 @@
 package Servidor.src;
 
+import java.io.*;
+import java.net.*;
+import java.util.concurrent.*;
+
 import Servidor.src.Handler.ClienteHandler;
+import baseDados.CRUD.UtilizadorCRUD;
 import baseDados.Config.GestorBaseDados;
 
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.sql.Connection;
-
 public class Servidor {
-    private int porta = 5001; // Porta fixa para o servidor
-    private Connection connection; // Conexão única compartilhada
+    private static final int PORT = 5001;
+    public static final int TIMEOUT_SECONDS = 60;
 
-    public Servidor() {
-        // Inicializar a conexão com o banco de dados ao iniciar o servidor
+    public static final ConcurrentHashMap<String, Socket> usuariosLogados = new ConcurrentHashMap<>();
+    private static ServerSocket serverSocket;
+
+    public static void main(String[] args) {
         GestorBaseDados gestorBaseDados = new GestorBaseDados();
-        this.connection = gestorBaseDados.getConexao();
-    }
 
-    public void iniciar() {
-        try (ServerSocket serverSocket = new ServerSocket(porta)) {
-            System.out.println("Servidor iniciado na porta " + porta);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Servidor está encerrando... Desconectando clientes.");
+            desconectarTodosClientes();
+            System.out.println("Todos os clientes foram desconectados. Encerrando servidor.");
+        }));
+
+        try {
+            serverSocket = new ServerSocket(PORT);
+            System.out.println("Servidor principal iniciado na porta " + PORT);
 
             while (true) {
-                Socket clienteSocket = serverSocket.accept();
-                System.out.println("Cliente conectado: " + clienteSocket.getInetAddress());
-
-                // Inicia um novo ClienteHandler e passa a conexão compartilhada
-                ClienteHandler clienteHandler = new ClienteHandler(clienteSocket, connection);
-                new Thread(clienteHandler).start();
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("Novo cliente conectado: " + clientSocket.getInetAddress());
+                new Thread(new ClienteHandler(clientSocket, gestorBaseDados)).start();
             }
         } catch (IOException e) {
-            System.out.println("Erro ao iniciar o servidor: " + e.getMessage());
+            System.err.println("Erro no servidor: " + e.getMessage());
         } finally {
-            // Fecha a conexão do banco de dados ao encerrar o servidor
-            try {
-                if (connection != null && !connection.isClosed()) {
-                    connection.close();
-                    System.out.println("Conexão com o banco de dados encerrada.");
-                }
-            } catch (Exception e) {
-                System.out.println("Erro ao fechar a conexão: " + e.getMessage());
-            }
+            desconectarTodosClientes();
         }
     }
 
-    public static void main(String[] args) {
-        Servidor servidor = new Servidor();
-        servidor.iniciar();
+
+    private static void desconectarTodosClientes() {
+        usuariosLogados.forEach((email, socket) -> {
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                    out.println("Servidor está encerrando. Você será desconectado.");
+                    socket.close();
+                    System.out.println("Cliente desconectado: " + email);
+                }
+            } catch (IOException e) {
+                System.err.println("Erro ao desconectar cliente " + email + ": " + e.getMessage());
+            }
+        });
+        usuariosLogados.clear();
     }
+
+
 }

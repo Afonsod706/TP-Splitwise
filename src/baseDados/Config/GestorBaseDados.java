@@ -12,7 +12,7 @@ public class GestorBaseDados {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-        String url = "jdbc:sqlite:src/baseDados/DataBase.db"; // Caminho da base de dados
+        String url = "jdbc:sqlite:src/baseDados/baseDados2.db"; // Caminho da base de dados
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
@@ -60,7 +60,8 @@ public class GestorBaseDados {
                 );
             """;
             stmt.execute(sqlUtilizador);
-
+//            String dropGrupo= "DROP TABLE IF EXISTS Grupo";
+//            stmt.execute(dropGrupo);
             String sqlGrupo = """
                 CREATE TABLE IF NOT EXISTS Grupo (
                     id_grupo INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,17 +102,21 @@ public class GestorBaseDados {
                 );
             """;
             stmt.execute(sqlDespesa);
-
+//            String dropGrupo= "DROP TABLE IF EXISTS detalhes_participantes";
+//            stmt.execute(dropGrupo);
             String sqlDespesaUtilizador = """
-                CREATE TABLE IF NOT EXISTS detalhes_participantes (
-                    id_despesa INTEGER,
-                    id_utilizador INTEGER,
-                    valor_devido REAL,
-                    FOREIGN KEY (id_despesa) REFERENCES Despesa(id_despesa),
-                    FOREIGN KEY (id_utilizador) REFERENCES Utilizador(id_utilizador),
-                    PRIMARY KEY (id_despesa, id_utilizador)
-                );
-            """;
+                        CREATE TABLE IF NOT EXISTS DespesaUtilizador (
+                              id_despesa INTEGER,
+                              id_utilizador INTEGER,         -- Utilizador envolvido na despesa
+                              id_remetente INTEGER,          -- Quem pagou a despesa
+                              valor_devido REAL DEFAULT 0,   -- Valor que o utilizador deve ao remetente
+                              valor_a_receber REAL DEFAULT 0,-- Valor que o remetente deve receber deste utilizador
+                              PRIMARY KEY (id_despesa, id_utilizador),
+                              FOREIGN KEY (id_despesa) REFERENCES Despesa(id_despesa),
+                              FOREIGN KEY (id_utilizador) REFERENCES Utilizador(id_utilizador),
+                              FOREIGN KEY (id_remetente) REFERENCES Utilizador(id_utilizador)
+                          );
+                    """;
             stmt.execute(sqlDespesaUtilizador);
 
             String sqlPagamento = """

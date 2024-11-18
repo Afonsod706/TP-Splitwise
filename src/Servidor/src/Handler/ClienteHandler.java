@@ -1,366 +1,495 @@
 package Servidor.src.Handler;
 
-import Cliente.src.Entidades.*;
-import Cliente.src.recursos.Comunicacao;
-import Servidor.src.Controller.*;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import Cliente.src.Entidades.Grupo;
+import Cliente.src.Entidades.Utilizador;
+import Cliente.src.recursos.Comandos;
+import Cliente.src.recursos.Comunicacao;
+import baseDados.CRUD.GrupoCRUD;
+import baseDados.CRUD.UtilizadorCRUD;
+import baseDados.CRUD.UtilizadorGrupoCRUD;
+import baseDados.Config.GestorBaseDados;
+
+import java.io.*;
 import java.net.Socket;
-import java.sql.Connection;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+
+import static Servidor.src.Servidor.TIMEOUT_SECONDS;
+import static Servidor.src.Servidor.usuariosLogados;
 
 public class ClienteHandler implements Runnable {
-    private final Socket clienteSocket;
-    private ObjectOutputStream output;
-    private ObjectInputStream input;
-    private final Connection connection;
-    private UtilizadorService utilizadorService;
-    private GrupoService grupoService;
-    private DespesaService despesaService;
-    private PagamentoService pagamentoService;
-    private String nomeCliente = "";
+    private final Socket clientSocket;
+    private final GestorBaseDados gestorBaseDados;
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private boolean authenticated = false;
+    private boolean timeout = false;
+    String clientAddress;
+    private Comunicacao comunicacao;
+    private Utilizador utilizadorAutenticado; // Armazena o utilizador autenticado durante a sessão
+    private boolean autenticado = false;
+    private List<Grupo> grupos;
+    private Grupo grupoSelecionado;
 
-    public ClienteHandler(Socket clienteSocket, Connection connection) {
-        this.clienteSocket = clienteSocket;
-        this.connection = connection;
-        try {
-            this.output = new ObjectOutputStream(clienteSocket.getOutputStream());
-            this.input = new ObjectInputStream(clienteSocket.getInputStream());
-
-            this.utilizadorService = new UtilizadorService(connection);
-            this.grupoService = new GrupoService(connection);
-            this.despesaService = new DespesaService(connection);
-            this.pagamentoService = new PagamentoService(connection);
-        } catch (Exception e) {
-            System.out.println("Erro ao iniciar ClienteHandler: " + e.getMessage());
-        }
+    public ClienteHandler(Socket clientSocket, GestorBaseDados gestorBaseDados) {
+        this.clientSocket = clientSocket;
+        this.gestorBaseDados = gestorBaseDados;
+        clientAddress = clientSocket.getInetAddress().getHostAddress();
+        this.grupos = new ArrayList<>();
     }
 
     @Override
     public void run() {
-        try {
-            while (true) {
-                Comunicacao requisicao = (Comunicacao) input.readObject();
-                Comunicacao resposta = processarRequisicao(requisicao);
+        try (ObjectInputStream inObj = new ObjectInputStream(clientSocket.getInputStream());
+             ObjectOutputStream outObj = new ObjectOutputStream(clientSocket.getOutputStream())) {
+            // Timeout se não autenticar em 60 segundos
+            scheduler.schedule(() -> {
+                if (!autenticado) {
+                    timeout = true;
+                    try {
+                        System.out.println("Cliente não autenticado desconectado por timeout: " + clientAddress);
+                        comunicacao.setResposta("Autenticação não realizada no tempo limite. Conexão encerrada.");
+                        outObj.writeObject(comunicacao);
+                        clientSocket.close();
+                    } catch (IOException e) {
+                        System.err.println("Erro ao encerrar conexão por timeout: " + e.getMessage());
+                    }
+                }
+            }, TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-                output.writeObject(resposta);
-                output.flush();
+            while ((comunicacao = (Comunicacao) inObj.readObject()) != null) {
+                Comandos comando = comunicacao.getComando();
+                System.out.println("Comando: " + comando);
+                if (comando == null) {
+                    comunicacao.setResposta("Erro:Comando Invalido");
+                    outObj.writeObject(comunicacao);
+                    outObj.flush();
+                    continue;
+                }
+                switch (comando) {
+                    case LOGIN:
+                        processarLogin(comunicacao, outObj);
+                        break;
+                    case REGISTRAR:
+                        processarRegistro(comunicacao, outObj);
+                        break;
+                    case EDITAR_DADOS:
+                        processarEdicaoDados(comunicacao, outObj);
+                        break;
+                    case CRIAR_GRUPO:
+                        processarCriacaoGrupo(comunicacao, outObj);
+                        break;
+                    case LISTAR_GRUPOS:
+                        processarListagemGrupos(comunicacao, outObj);
+                        break;
+                    case SELECIONAR_GRUPO:
+                        processarSelecaoGrupo(comunicacao, outObj);
+                        break;
+                    case EDITAR_GRUPO:
+                         processarEdicaoGrupo(comunicacao, outObj);
+                        break;
+                    case ELIMINAR_GRUPO:
+                        processarEliminacaoGrupo(comunicacao, outObj);
+                        break;
+                    case SAIR_GRUPO:
+                         processarSaidaGrupo(comunicacao, outObj);
+                        break;
+                    case SAIR:
+                        handleExit(outObj);
+                        return; // Encerra o loop
+                    case LOGOUT:
+                        // Limpa os dados do cliente autenticado
+                        handleExit(outObj);
+                        return; // Encerra o loop
+                    default:
+                        comunicacao.setResposta("Comando inválido.");
+                        outObj.writeObject(comunicacao);
+                        outObj.flush();
+                }
             }
-        } catch (Exception e) {
-            String msgDesconexao = "Cliente desconectado";
-            if (!nomeCliente.isEmpty()) {
-                msgDesconexao += ": " + nomeCliente;
-            }
-            System.out.println(msgDesconexao);
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Conexão perdida com o cliente: " + clientAddress);
         } finally {
-            encerrarConexao();
+            // Remover cliente dos logados caso a conexão seja perdida
+            if (utilizadorAutenticado != null) {
+                logoutUser(clientAddress);
+            }
         }
     }
 
-    private Comunicacao processarRequisicao(Comunicacao requisicao) {
-        switch (requisicao.getComando()) {
-            case REGISTRO -> registrarUtilizador(requisicao);
-            case AUTENTICACAO -> autenticarUtilizador(requisicao);
-            case EDICAO_DADOS -> editarDadosUtilizador(requisicao);
-            case CRIACAO_GRUPO -> criarGrupo(requisicao);
-            case SELECIONAR_GRUPO -> selecionarGrupo(requisicao);
-            case CRIACAO_CONVITE -> enviarConvite(requisicao);
-            case LISTAR_CONVITES -> listarConvitesPendentes(requisicao);
-            case ACEITAR_CONVITE -> aceitarConvite(requisicao);
-            case RECUSAR_CONVITE -> recusarConvite(requisicao);
-            case LISTAR_GRUPOS -> listarGruposDoUtilizador(requisicao);
-            case INSERIR_DESPESA -> inserirDespesa(requisicao);
-            case TOTAL_GASTOS_GRUPO -> calcularTotalGastosGrupo(requisicao);
-            case HISTORICO_DESPESAS -> listarHistoricoDespesas(requisicao);
-            case INSERIR_PAGAMENTO -> inserirPagamento(requisicao);
-            case LISTAR_PAGAMENTOS -> listarPagamentosGrupo(requisicao);
-            case SALDOS_GRUPO -> visualizarSaldosGrupo(requisicao);
-            case SAIR_GRUPO -> sairGrupo(requisicao);
-            case EDITAR_DESPESA -> editarDespesa(requisicao);
-            case ELIMINAR_DESPESA -> eliminarDespesa(requisicao);
-            case ELIMINAR_PAGAMENTO -> eliminarPagamento(requisicao);
-            case EXPORTAR_DESPESAS -> exportarDespesasParaCSV(requisicao);
-            default -> requisicao.setMensagemServidor("Comando desconhecido");
-        }
-        return requisicao;
-    }
-
-    private void registrarUtilizador(Comunicacao requisicao) {
-        Utilizador utilizador = requisicao.getUtilizador();
-        boolean sucesso = utilizadorService.registrarUtilizador(utilizador.getNome(), utilizador.getTelefone(), utilizador.getEmail(), utilizador.getPassword());
-
-        String mensagem = sucesso ? "Registro realizado com sucesso" : "Erro no registro ou email já existente";
-        requisicao.setMensagemServidor(mensagem);
-
-        if (sucesso) {
-            Utilizador utilizadorRegistrado = utilizadorService.buscarUtilizadorPorEmail(utilizador.getEmail());
-            requisicao.setUtilizador(utilizadorRegistrado);
-        }
-    }
-
-    private void autenticarUtilizador(Comunicacao requisicao) {
-        Utilizador utilizador = requisicao.getUtilizador();
-        boolean autenticado = utilizadorService.autenticarUtilizador(utilizador.getEmail(), utilizador.getPassword());
-
-        if (autenticado) {
-            Utilizador utilizadorAutenticado = utilizadorService.buscarUtilizadorPorEmail(utilizador.getEmail());
-            nomeCliente = utilizadorAutenticado.getNome();
-            requisicao.setMensagemServidor("Autenticado com sucesso");
-            requisicao.setUtilizador(utilizadorAutenticado);
-        } else {
-            requisicao.setMensagemServidor("Falha na autenticação");
-        }
-    }
-
-    private void editarDadosUtilizador(Comunicacao requisicao) {
-        Utilizador utilizador = requisicao.getUtilizador();
-        boolean sucesso = utilizadorService.editarPerfil(utilizador.getId(), utilizador.getNome(), utilizador.getTelefone(), utilizador.getEmail(), utilizador.getPassword());
-
-        String mensagem = sucesso ? "Perfil atualizado com sucesso" : "Erro ao atualizar perfil";
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-    private void criarGrupo(Comunicacao requisicao) {
-        Grupo grupo = requisicao.getGrupo();
-        boolean sucesso = grupoService.criarGrupo(grupo.getNome(), grupo.getIdCriador());
-
-        String mensagem = sucesso ? "Grupo criado com sucesso" : "Erro ao criar grupo ou nome já existente";
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-
-    private void selecionarGrupo(Comunicacao requisicao) {
-        String nomeGrupo = requisicao.getGrupo().getNome();
-        int idUtilizador = requisicao.getUtilizador().getId();
-
-        // Busca o grupo pelo nome e verifica se o utilizador é membro
-        Grupo grupoSelecionado = grupoService.selecionarGrupoCorrente(idUtilizador, nomeGrupo);
-
-        String mensagem = (grupoSelecionado != null) ? "Grupo selecionado com sucesso" : "Erro ao selecionar grupo ou permissão negada.";
-        requisicao.setMensagemServidor(mensagem);
-
-        // Atualiza o objeto requisicao com o grupo encontrado, se ele existir
-        if (grupoSelecionado != null) {
-            requisicao.setGrupo(grupoSelecionado);
-        }
-    }
-
-
-    private void enviarConvite(Comunicacao requisicao) {
-        Convite convite = requisicao.getConvite();
-
-        // Buscar o ID do utilizador convidado pelo e-mail fornecido
-        Utilizador utilizadorConvidado = utilizadorService.buscarUtilizadorPorEmail(convite.getEmailConvidado());
-        if (utilizadorConvidado == null) {
-            requisicao.setMensagemServidor("Erro: Utilizador convidado não encontrado.");
+    private void processarSaidaGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
             return;
         }
 
-        // Define o ID do utilizador convidado no convite
-        convite.setIdUtilizadorConvidado(utilizadorConvidado.getId());
-
-        // Verifica se o utilizador que está enviando o convite é membro do grupo
-        boolean sucesso = utilizadorService.enviarConvite(convite.getIdUtilizadorConvite(), convite.getIdGrupo(), convite.getIdUtilizadorConvidado());
-
-        String mensagem = sucesso ? "Convite enviado com sucesso" : "Erro ao enviar convite ou convite já existente";
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-
-    private void listarConvitesPendentes(Comunicacao requisicao) {
-        int idUtilizador = requisicao.getUtilizador().getId();
-        List<Convite> convitesPendentes = utilizadorService.visualizarConvitesPendentes(idUtilizador);
-
-        requisicao.setMensagemServidor(convitesPendentes.isEmpty() ? "Nenhum convite pendente" : convitesPendentes.toString());
-    }
-
-    private void aceitarConvite(Comunicacao requisicao) {
-        int idConvite = requisicao.getConvite().getIdConvite();
-
-        // Atualiza o estado do convite para "aceito"
-        boolean conviteAceito = utilizadorService.aceitarConvite(idConvite);
-
-        // Verifica se o convite foi aceito com sucesso
-        if (conviteAceito) {
-            // Recupera o convite aceito para obter o idGrupo e o idUtilizadorConvidado
-            Convite convite = utilizadorService.buscarConvitePorId(idConvite);
-
-            if (convite != null) {
-                int idGrupo = convite.getIdGrupo();
-                int idUtilizador = convite.getIdUtilizadorConvidado();
-
-                // Adiciona o utilizador ao grupo
-                boolean adicionadoAoGrupo = grupoService.adicionarUtilizadorAoGrupo(idUtilizador, idGrupo);
-
-                // Define a mensagem de acordo com o sucesso da operação
-                String mensagem = adicionadoAoGrupo ? "Convite aceito e utilizador adicionado ao grupo com sucesso." : "Convite aceito, mas houve um erro ao adicionar o utilizador ao grupo.";
-                requisicao.setMensagemServidor(mensagem);
-            } else {
-                requisicao.setMensagemServidor("Erro: Convite não encontrado.");
-            }
-        } else {
-            requisicao.setMensagemServidor("Erro ao aceitar convite");
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para sair.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
         }
+
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+
+        // Verifica se o utilizador está associado ao grupo
+        if (!utilizadorGrupoCRUD.verificarMembro(grupoSelecionado.getIdGrupo(), utilizadorAutenticado.getId())) {
+            comunicacao.setResposta("Erro: Você não pertence ao grupo selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+        // Verifica se o utilizador é o criador do grupo
+        if (grupoSelecionado.getIdCriador() == utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Você é o criador do grupo. Apenas é possível eliminar o grupo.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se o utilizador tem despesas associadas no grupo
+        boolean saldoZerado = utilizadorGrupoCRUD.verificarSaldoUtilizador(grupoSelecionado.getIdGrupo(), utilizadorAutenticado.getId());
+        if (!saldoZerado) {
+            comunicacao.setResposta("Erro: Você possui despesas associadas ou saldo pendente neste grupo. Não é possível sair.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Remove a associação do utilizador ao grupo
+        boolean removido = utilizadorGrupoCRUD.removerAssociacao(grupoSelecionado.getIdGrupo(), utilizadorAutenticado.getId());
+        if (removido) {
+            comunicacao.setResposta("Você saiu do grupo com sucesso.");
+        } else {
+            comunicacao.setResposta("Erro ao tentar sair do grupo. Tente novamente.");
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
     }
 
 
-    private void recusarConvite(Comunicacao requisicao) {
-        int idConvite = requisicao.getConvite().getIdConvite();
-        boolean sucesso = utilizadorService.recusarConvite(idConvite);
 
-        String mensagem = sucesso ? "Convite recusado com sucesso" : "Erro ao recusar convite";
-        requisicao.setMensagemServidor(mensagem);
+    private void processarEliminacaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para eliminação.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+
+        // Verifica se o utilizador autenticado é o criador do grupo
+        if (grupoSelecionado.getIdCriador() != utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Apenas o criador do grupo pode eliminá-lo.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se todos os membros do grupo têm saldo zerado
+        boolean saldoGrupoZerado = utilizadorGrupoCRUD.verificarSaldoGrupo(grupoSelecionado.getIdGrupo());
+        if (!saldoGrupoZerado) {
+            comunicacao.setResposta("Erro: O grupo possui contas pendentes e não pode ser eliminado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        GrupoCRUD grupoCRUD = new GrupoCRUD(gestorBaseDados.getConexao());
+        boolean associadosRemovidos = utilizadorGrupoCRUD.removerAssociacoesGrupo(grupoSelecionado.getIdGrupo());
+        if (!associadosRemovidos) {
+            comunicacao.setResposta("Erro ao remover associações dos utilizadores ao grupo. Tente novamente.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Elimina o grupo se todas as verificações forem atendidas
+        boolean eliminado = grupoCRUD.eliminarGrupo(grupoSelecionado.getIdGrupo());
+        if (eliminado) {
+            comunicacao.setResposta("Grupo eliminado com sucesso.");
+            grupoSelecionado = null; // Limpa o grupo selecionado após a eliminação
+        } else {
+            comunicacao.setResposta("Erro ao tentar eliminar o grupo. Tente novamente.");
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
     }
 
-    private void listarGruposDoUtilizador(Comunicacao requisicao) {
-        int idUtilizador = requisicao.getUtilizador().getId();
-        List<Grupo> grupos = grupoService.listarGruposDoUtilizador(idUtilizador);
+
+    private void processarEdicaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+
+        String novoNomeGrupo = comunicacao.getGrupo().getNome(); // Nome atualizado enviado pelo cliente
+
+        // Verifica se o grupo selecionado é válido
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para edição.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se o utilizador pertence ao grupo selecionado
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        if (!utilizadorGrupoCRUD.verificarMembro(grupoSelecionado.getIdGrupo(), utilizadorAutenticado.getId())) {
+            comunicacao.setResposta("Erro: Você não pertence ao grupo selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+//        // Verifica se o nome enviado corresponde ao grupo atualmente selecionado
+//        if (!grupoSelecionado.getNome().equalsIgnoreCase(novoNomeGrupo)) {
+//            comunicacao.setResposta("Erro: O nome enviado não corresponde ao grupo atualmente selecionado.");
+//            outObj.writeObject(comunicacao);
+//            outObj.flush();
+//            return;
+//        }
+
+        GrupoCRUD grupoCRUD = new GrupoCRUD(gestorBaseDados.getConexao());
+        String nomeAntigo=grupoSelecionado.getNome();
+        grupoSelecionado.setNome(novoNomeGrupo);
+        // Atualiza o nome do grupo no banco de dados
+        boolean atualizado = grupoCRUD.atualizarGrupo(grupoSelecionado);
+        if (atualizado) {
+            grupoSelecionado.setNome(novoNomeGrupo); // Atualiza o nome do grupo localmente
+            comunicacao.setResposta("Grupo editado com sucesso. Novo nome: " + grupoSelecionado.getNome());
+        } else {
+            grupoSelecionado.setNome(nomeAntigo);
+            comunicacao.setResposta("Erro ao atualizar o grupo. Tente novamente.");
+        }
+
+        // Envia a resposta de volta ao cliente
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+
+    private void processarSelecaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        String nomeGrupo = comunicacao.getGrupo().getNome(); // Nome do grupo enviado pelo cliente
+        GrupoCRUD grupoCRUD = new GrupoCRUD(gestorBaseDados.getConexao());
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+
+        // Verifica se o grupo já está selecionado
+        if (grupoSelecionado != null && grupoSelecionado.getNome().equalsIgnoreCase(nomeGrupo)) {
+            comunicacao.setResposta("Erro: O grupo '" + nomeGrupo + "' já está selecionado.");
+        } else {
+            // Busca o grupo pelo nome
+            Grupo grupo = grupoCRUD.obterGrupoPorNome(nomeGrupo);
+
+            // Verifica se o grupo existe e se o utilizador pertence ao grupo
+            if (grupo != null && utilizadorGrupoCRUD.verificarMembro(grupo.getIdGrupo(), utilizadorAutenticado.getId())) {
+                grupoSelecionado = grupo; // Atualiza o grupo selecionado
+                comunicacao.setResposta("Grupo selecionado com sucesso: " + grupoSelecionado.getNome());
+                //comunicacao.setGrupoSelecionado(grupoSelecionado); // Atualiza o grupo na comunicação
+            } else if (grupo == null) {
+                comunicacao.setResposta("Erro: Grupo '" + nomeGrupo + "' não encontrado no sistema.");
+            } else {
+                comunicacao.setResposta("Erro: Você não pertence ao grupo '" + nomeGrupo + "'.");
+            }
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+
+    private void processarListagemGrupos(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        List<Grupo> grupos = utilizadorGrupoCRUD.listarGruposPorUtilizador(utilizadorAutenticado.getId());
 
         if (grupos.isEmpty()) {
-            requisicao.setMensagemServidor("Nenhum grupo encontrado");
+            comunicacao.setResposta("Nenhum grupo encontrado.");
         } else {
-            // Formatar a lista de grupos para exibir apenas os nomes
-            StringBuilder listaGrupos = new StringBuilder("Grupos:\n");
+            // Construir uma string com informações detalhadas dos grupos
+            StringBuilder detalhesGrupos = new StringBuilder("Grupos disponíveis:\n");
             for (Grupo grupo : grupos) {
-                listaGrupos.append(" - ").append(grupo.getNome()).append("\n");
+                detalhesGrupos.append(" - ID: ").append(grupo.getIdGrupo())
+                        .append(", Nome: ").append(grupo.getNome())
+                        .append(", Criador: ").append(grupo.getIdCriador())
+                        .append("\n");
             }
-            requisicao.setMensagemServidor(listaGrupos.toString());
-        }
-    }
-
-
-    private void inserirDespesa(Comunicacao requisicao) {
-        Despesa despesa = requisicao.getDespesa();
-        List<String> nomesParticipantes = requisicao.getNomesParticipantes();
-
-        List<Integer> idsParticipantes = grupoService.obterIdsPorNomesNoGrupo(despesa.getIdGrupo(), nomesParticipantes);
-
-        if (idsParticipantes.size() != nomesParticipantes.size()) {
-            requisicao.setMensagemServidor("Erro: Alguns participantes não estão no grupo.");
-            return;
+            comunicacao.setResposta(detalhesGrupos.toString());
+            this.grupos = grupos; // Atualiza a lista de grupos
         }
 
-        boolean sucesso = despesaService.inserirDespesa(
-                despesa.getIdGrupo(),
-                despesa.getIdCriador(),
-                despesa.getDescricao(),
-                despesa.getValor(),
-                despesa.getIdPagador(),
-                idsParticipantes
-        );
-
-        String mensagem = sucesso ? "Despesa inserida com sucesso" : "Erro ao inserir despesa";
-        requisicao.setMensagemServidor(mensagem);
+        outObj.writeObject(comunicacao); // Envia a resposta para o cliente
+        outObj.flush();
     }
 
-    private void calcularTotalGastosGrupo(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        double totalGastos = despesaService.calcularTotalGastosGrupo(idGrupo);
 
-        String mensagem = String.format("Total de gastos do grupo: %.2f", totalGastos);
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-    private void listarHistoricoDespesas(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        List<Despesa> historicoDespesas = despesaService.visualizarHistoricoDespesas(idGrupo);
-
-        String mensagem = historicoDespesas.isEmpty() ? "Nenhuma despesa encontrada" : historicoDespesas.toString();
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-    private void inserirPagamento(Comunicacao requisicao) {
-        Pagamento pagamento = requisicao.getPagamento();
-        boolean sucesso = pagamentoService.registrarPagamento(
-                pagamento.getIdGrupo(),
-                pagamento.getIdPagador(),
-                pagamento.getIdRecebedor(),
-                pagamento.getValor()
-        );
-
-        String mensagem = sucesso ? "Pagamento registrado com sucesso" : "Erro ao registrar pagamento";
-        requisicao.setMensagemServidor(mensagem);
-    }
-
-    private void listarPagamentosGrupo(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        List<Pagamento> pagamentos = pagamentoService.listarPagamentosDoGrupo(idGrupo);
-
-        requisicao.setMensagemServidor(pagamentos.isEmpty() ? "Nenhum pagamento encontrado" : pagamentos.toString());
-    }
-
-    private void visualizarSaldosGrupo(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        List<String> relatorioSaldos = new SaldoService(connection).gerarRelatorioSaldos(idGrupo);
-
-        requisicao.setMensagemServidor(relatorioSaldos.isEmpty() ? "Nenhum saldo encontrado" : String.join("\n", relatorioSaldos));
-    }
-
-    private void editarDespesa(Comunicacao requisicao) {
-        Despesa despesa = requisicao.getDespesa();
-        List<String> nomesParticipantes = requisicao.getNomesParticipantes();
-
-        List<Integer> idsValidos = grupoService.obterIdsPorNomesNoGrupo(despesa.getIdGrupo(), nomesParticipantes);
-
-        if (idsValidos.size() != nomesParticipantes.size()) {
-            requisicao.setMensagemServidor("Erro: Alguns participantes não estão no grupo.");
-            return;
+    private void processarCriacaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        String nomeGrupo = comunicacao.getGrupo().getNome(); // Nome do grupo enviado pelo cliente
+        GrupoCRUD grupoCRUD = new GrupoCRUD(gestorBaseDados.getConexao());
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        if (grupoCRUD.nomeExiste(nomeGrupo)) {
+            comunicacao.setResposta("Erro: O nome do grupo já existe.");
+        } else {
+            Grupo grupoCriado = grupoCRUD.criarGrupo(nomeGrupo, utilizadorAutenticado.getId());
+            if (grupoCriado != null) {
+                boolean associado = utilizadorGrupoCRUD.associarUtilizadorAGrupo(utilizadorAutenticado.getId(), grupoCriado.getIdGrupo());
+                if (associado) {
+                    grupos.add(grupoCriado);
+                    comunicacao.setResposta("Grupo criado com sucesso!");
+                    comunicacao.setResposta("Grupo criado com sucesso e associado ao utilizador!");
+                } else
+                    // Caso haja erro na associação, informar falha
+                    comunicacao.setResposta("Erro ao associar o utilizador ao grupo. O grupo foi criado, mas não associado.");
+            } else {
+                comunicacao.setResposta("Erro ao criar o grupo.");
+            }
         }
 
-        boolean sucesso = despesaService.editarDespesa(
-                despesa.getId(),
-                despesa.getDescricao(),
-                despesa.getValor(),
-                idsValidos
-        );
-
-        String mensagem = sucesso ? "Despesa editada com sucesso" : "Erro ao editar despesa";
-        requisicao.setMensagemServidor(mensagem);
+        outObj.writeObject(comunicacao);
+        outObj.flush();
     }
 
-    private void eliminarDespesa(Comunicacao requisicao) {
-        int idDespesa = requisicao.getDespesa().getId();
-        boolean sucesso = despesaService.eliminarDespesa(idDespesa);
 
-        String mensagem = sucesso ? "Despesa eliminada com sucesso" : "Erro ao eliminar despesa";
-        requisicao.setMensagemServidor(mensagem);
+    private void processarEdicaoDados(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador dadosAtualizados = comunicacao.getUtilizador();
+        System.out.println("Solicitação de edição de dados para: " + dadosAtualizados.getEmail());
+
+        if (dadosAtualizados.getEmail() == null || dadosAtualizados.getEmail().isEmpty()) {
+            comunicacao.setResposta("Erro: Email inválido.");
+        } else if (!usuariosLogados.containsKey(dadosAtualizados.getEmail())) {
+            comunicacao.setResposta("Erro: Usuário não está autenticado.");
+        } else {
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            boolean atualizado = utilizadorCRUD.atualizarDados(dadosAtualizados);
+
+            if (atualizado) {
+                comunicacao.setResposta("Dados atualizados com sucesso!");
+                utilizadorAutenticado = dadosAtualizados; // Atualiza os dados na sessão
+            } else {
+                comunicacao.setResposta("Erro ao atualizar os dados.");
+            }
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
     }
 
-    private void eliminarPagamento(Comunicacao requisicao) {
-        int idPagamento = requisicao.getPagamento().getIdPagamento();
-        boolean sucesso = pagamentoService.eliminarPagamento(idPagamento);
 
-        String mensagem = sucesso ? "Pagamento eliminado com sucesso" : "Erro ao eliminar pagamento";
-        requisicao.setMensagemServidor(mensagem);
+    private void processarLogin(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador utilizador = comunicacao.getUtilizador();
+        System.out.println("Processando login para: " + utilizador.getEmail());
+
+        if (usuariosLogados.containsKey(utilizador.getEmail())) {
+            comunicacao.setResposta("Erro: Esta conta já está logada.");
+        } else {
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            if (utilizadorCRUD.validarCredenciais(utilizador.getEmail(), utilizador.getPassword())) {
+                // Login bem-sucedido: Atualiza o estado do servidor
+                utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail());
+                usuariosLogados.put(utilizadorAutenticado.getEmail(), clientSocket);
+
+                comunicacao.setResposta("Login bem-sucedido!");
+                comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
+                comunicacao.setAutenticado(true); // Marca o cliente como autenticado
+                autenticado = true;
+                exibirDados();
+            } else {
+                comunicacao.setResposta("Erro: Email ou senha inválidos.");
+            }
+        }
+
+        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
+        outObj.flush();
     }
 
-    private void exportarDespesasParaCSV(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        String caminhoArquivo = "despesas_grupo_" + idGrupo + ".csv";
-        boolean sucesso = despesaService.exportarDespesasParaCSV(idGrupo, caminhoArquivo);
+    private void processarRegistro(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador utilizador = comunicacao.getUtilizador();
+        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
 
-        String mensagem = sucesso ? "Despesas exportadas com sucesso para " + caminhoArquivo : "Erro ao exportar despesas";
-        requisicao.setMensagemServidor(mensagem);
+        if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
+            comunicacao.setResposta("Erro: Este email já está registrado.");
+        } else if (utilizadorCRUD.adicionarUtilizador(utilizador)) {
+            utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail()); // Atualiza o estado
+            comunicacao.setResposta("Registro concluído com sucesso!");
+            comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
+            comunicacao.setAutenticado(true); // Marca o cliente como autenticado
+            autenticado = true;
+            exibirDados();
+        }
+
+        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
+        outObj.flush();
     }
 
-    private void sairGrupo(Comunicacao requisicao) {
-        int idGrupo = requisicao.getGrupo().getIdGrupo();
-        int idUtilizador = requisicao.getUtilizador().getId();
-
-        boolean sucesso = grupoService.sairDoGrupo(idGrupo, idUtilizador);
-
-        String mensagem = sucesso ? "Você saiu do grupo com sucesso" : "Erro ao sair do grupo. Verifique se não há despesas associadas.";
-        requisicao.setMensagemServidor(mensagem);
+    private void handleExit(ObjectOutputStream out) throws IOException {
+        out.writeObject("Conexão encerrada pelo servidor. Até logo!");
+        if (utilizadorAutenticado != null)
+            System.out.println("Cliente solicitou desconexão: " + utilizadorAutenticado.getNome() + "(" + clientAddress + ")");
+        else
+            System.out.println("Cliente solicitou desconexão: (" + clientAddress + ")");
     }
 
-    private void encerrarConexao() {
+    private void logoutUser(String clientAddress) {
+        if (!timeout) {
+            if (utilizadorAutenticado != null) {
+                System.out.println("Cliente desconectado: " + utilizadorAutenticado.getNome() + " (" + clientAddress + ")");
+                usuariosLogados.remove(utilizadorAutenticado.getEmail());
+            } else {
+                System.out.println("Cliente desconectado: (" + clientAddress + ")");
+            }
+        }
         try {
-            if (clienteSocket != null) clienteSocket.close();
-            if (output != null) output.close();
-            if (input != null) input.close();
-        } catch (Exception e) {
-            System.out.println("Erro ao encerrar conexão: " + e.getMessage());
+            if (clientSocket != null && !clientSocket.isClosed()) {
+                clientSocket.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao fechar socket do cliente: " + e.getMessage());
         }
     }
+    private void processarLogout(ObjectOutputStream outObj) throws IOException {
+        // Redefine o estado de autenticação sem fechar o socket
+        System.out.println("Processando logout para o cliente.");
+        if (utilizadorAutenticado != null) {
+            usuariosLogados.remove(utilizadorAutenticado.getEmail());
+            utilizadorAutenticado = null; // Remove as informações do utilizador autenticado
+        }
+        autenticado = false;
+        comunicacao.setAutenticado(false); // Atualiza o estado no objeto comunicação
+        comunicacao.setResposta("Logout realizado com sucesso. Retorne ao menu de autenticação.");
+        outObj.writeObject(comunicacao); // Envia a resposta para o cliente
+        outObj.flush();
+    }
+
+
+    public void exibirDados() {
+        // Exibe os dados do utilizador autenticado no console do servidor
+        System.out.println("Usuário registrado com sucesso:");
+        System.out.println("ID: " + utilizadorAutenticado.getId());
+        System.out.println("Nome: " + utilizadorAutenticado.getNome());
+        System.out.println("Email: " + utilizadorAutenticado.getEmail());
+        System.out.println("Telefone: " + utilizadorAutenticado.getTelefone());
+        System.out.println("autenticação " + comunicacao.getAutenticado());
+    }
+
 }
+///PROBLEMAS POSSIVEIS:
+//-Logout : é suposte fazer com que ele sai do login para ficar no menu de autenticação mas esta a occorer muito erros a theard fecha enexperadamente
