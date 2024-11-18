@@ -1,4 +1,4 @@
-package Servidor_backup;
+package Servidor.src;
 
 import java.io.*;
 import java.net.*;
@@ -10,6 +10,8 @@ public class ServidorBackup {
     private static final String BACKUP_DB_PATH = "src/baseDados/backup.db";
 
     public static void main(String[] args) {
+        inicializarBaseDeDados(); // Garante que a estrutura básica da base exista
+
         try (MulticastSocket socket = new MulticastSocket(MULTICAST_PORT)) {
             InetAddress group = InetAddress.getByName(MULTICAST_ADDRESS);
             socket.joinGroup(group);
@@ -38,6 +40,26 @@ public class ServidorBackup {
         }
     }
 
+    private static void inicializarBaseDeDados() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + BACKUP_DB_PATH);
+             Statement stmt = conn.createStatement()) {
+            String sqlVersion = """
+                CREATE TABLE IF NOT EXISTS Version (
+                    version INTEGER
+                );
+            """;
+            stmt.execute(sqlVersion);
+
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM Version");
+            if (rs.next() && rs.getInt("count") == 0) {
+                stmt.execute("INSERT INTO Version (version) VALUES (0)");
+                System.out.println("Base de dados backup inicializada com versão 0.");
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao inicializar a base de dados backup: " + e.getMessage());
+        }
+    }
+
     private static void verificarVersao(int versaoRecebida, int portaPrincipal) {
         int versaoAtual = obterVersaoLocal();
 
@@ -56,7 +78,7 @@ public class ServidorBackup {
                 return rs.getInt("version");
             }
         } catch (SQLException e) {
-            System.out.println("Erro ao obter versão local: " + e.getMessage());
+            System.err.println("Erro ao obter versão local: " + e.getMessage());
         }
         return 0;
     }
@@ -73,11 +95,10 @@ public class ServidorBackup {
                 out.write(buffer, 0, bytesRead);
             }
 
-            System.out.println("Base de dados sincronizada com sucesso.");
+            System.out.println("Base de dados sincronizada com sucesso. Arquivo salvo em: " + BACKUP_DB_PATH);
 
         } catch (IOException e) {
-            System.out.println("Erro ao sincronizar base de dados: " + e.getMessage());
+            System.err.println("Erro ao sincronizar base de dados: " + e.getMessage());
         }
     }
 }
-
