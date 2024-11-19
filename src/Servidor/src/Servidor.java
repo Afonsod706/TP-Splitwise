@@ -2,6 +2,7 @@ package Servidor.src;
 
 import java.io.*;
 import java.net.*;
+import java.time.LocalDateTime;
 import java.util.concurrent.*;
 
 import Servidor.src.Handler.ClienteHandler;
@@ -9,6 +10,9 @@ import baseDados.Config.GestorBaseDados;
 
 public class Servidor {
     private static final int PORT = 5001;
+    private static final int BACKUP_PORT = 5002; // Porta para comunicação com o servidor de backup
+    private static final int MULTICAST_PORT = 4446; // Porta multicast para envio de heartbeats
+    private static final String MULTICAST_GROUP = "230.0.0.1"; // Grupo Multicast
     public static final int TIMEOUT_SECONDS = 60;
 
     // Armazena os ObjectOutputStream associados aos emails dos usuários logados
@@ -30,8 +34,10 @@ public class Servidor {
             serverSocket = new ServerSocket(PORT);
             System.out.println("Servidor principal iniciado na porta " + PORT);
 
-            // Inicia a thread para conexões de backup
-            new Thread(() -> gerenciarConexoesBackup(gestorBaseDados)).start();
+            new Thread(() -> iniciarBackupHandler()).start();
+
+            // Inicia um thread para enviar heartbeats
+            new Thread(() -> enviarHeartbeat()).start();
 
             while (true) {
                 // Aceita novas conexões de clientes
@@ -45,6 +51,50 @@ public class Servidor {
             desconectarTodosClientes();
         }
     }
+
+    // Envia heartbeats para o servidor de backup via multicast
+    private static void enviarHeartbeat() {
+        try (MulticastSocket socket = new MulticastSocket()) {
+            InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
+            socket.setTimeToLive(255); // Define o TTL (Time to Live) para a comunicação multicast
+
+            while (true) {
+                Thread.sleep(30000); // Envia heartbeat a cada 30 segundos
+                String mensagem = "HEARTBEAT";
+                DatagramPacket packet = new DatagramPacket(mensagem.getBytes(), mensagem.length(), group, MULTICAST_PORT);
+                socket.send(packet);
+                System.out.println("Heartbeat enviado: " + LocalDateTime.now());
+            }
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Erro ao enviar heartbeat: " + e.getMessage());
+        }
+    }
+
+    // Método para gerenciar a comunicação com o servidor de backup
+    private static void iniciarBackupHandler() {
+        try (ServerSocket backupServerSocket = new ServerSocket(BACKUP_PORT)) {
+            System.out.println("Servidor de backup aguardando conexões na porta " + BACKUP_PORT);
+
+            while (true) {
+                try (Socket backupSocket = backupServerSocket.accept();
+                     PrintWriter out = new PrintWriter(backupSocket.getOutputStream(), true)) {
+
+                    System.out.println("Servidor de backup conectado: " + backupSocket.getInetAddress());
+
+                    // Envia o caminho da base de dados original para o servidor de backup
+                    String caminhoBaseDados = "src/baseDados/BaseDados3.db";
+                    out.println(caminhoBaseDados);
+                    System.out.println("Caminho da base de dados enviado ao servidor de backup: " + caminhoBaseDados);
+
+                } catch (IOException e) {
+                    System.err.println("Erro ao lidar com o servidor de backup: " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao iniciar o handler de backup: " + e.getMessage());
+        }
+    }
+
 
     // Desconecta todos os clientes e fecha os streams
     private static void desconectarTodosClientes() {
@@ -63,32 +113,4 @@ public class Servidor {
         usuariosLogados.clear();
     }
 
-    // Gerencia conexões para servidores de backup
-    private static void gerenciarConexoesBackup(GestorBaseDados gestorBaseDados) {
-        try (ServerSocket backupSocket = new ServerSocket(PORT + 1)) { // Porta dedicada para backups
-            System.out.println("Servidor aguardando conexões de backup na porta " + (PORT + 1));
-
-            while (true) {
-                Socket backupConnection = backupSocket.accept();
-                System.out.println("Conexão de servidor de backup aceita: " + backupConnection.getInetAddress());
-
-                new Thread(() -> {
-                    try (OutputStream out = backupConnection.getOutputStream();
-                         FileInputStream fis = new FileInputStream("src/baseDados/baseDados3.db")) {
-
-                        byte[] buffer = new byte[4096];
-                        int bytesRead;
-                        while ((bytesRead = fis.read(buffer)) != -1) {
-                            out.write(buffer, 0, bytesRead);
-                        }
-                        System.out.println("Base de dados enviada ao backup.");
-                    } catch (IOException e) {
-                        System.err.println("Erro ao enviar base de dados ao backup: " + e.getMessage());
-                    }
-                }).start();
-            }
-        } catch (IOException e) {
-            System.err.println("Erro no socket de backup: " + e.getMessage());
-        }
-    }
 }
