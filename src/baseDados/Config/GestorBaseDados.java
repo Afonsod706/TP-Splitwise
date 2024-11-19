@@ -16,7 +16,8 @@ public class GestorBaseDados {
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
-            //limparDadosTeste();
+          // limparDadosTeste();
+            //ApagarTabelas();
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
@@ -111,7 +112,6 @@ public class GestorBaseDados {
                               id_utilizador INTEGER,         -- Utilizador envolvido na despesa
                               id_remetente INTEGER,          -- Quem pagou a despesa
                               valor_devido REAL DEFAULT 0,   -- Valor que o utilizador deve ao remetente
-                              valor_a_receber REAL DEFAULT 0,-- Valor que o remetente deve receber deste utilizador
                               PRIMARY KEY (id_despesa, id_utilizador),
                               FOREIGN KEY (id_despesa) REFERENCES Despesa(id_despesa),
                               FOREIGN KEY (id_utilizador) REFERENCES Utilizador(id_utilizador),
@@ -245,12 +245,38 @@ public class GestorBaseDados {
             stmt.execute("DELETE FROM Convite;");
             stmt.execute("DELETE FROM DespesaUtilizador;");
 
+            // Reiniciar IDs autoincrementados
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='utilizador_grupo';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='Grupo';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='Utilizador';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='Despesa';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='Convite';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='DespesaUtilizador';");
 
-            System.out.println("Dados de teste removidos com sucesso.");
+            System.out.println("Dados de teste removidos e IDs reiniciados com sucesso.");
 
         } catch (SQLException e) {
             System.err.println("Erro ao limpar dados de teste: " + e.getMessage());
         }
     }
+    public void ApagarTabelas() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados3.db");
+             Statement stmt = conn.createStatement()) {
+
+            // Apagar as tabelas
+            stmt.execute("DROP TABLE IF EXISTS utilizador_grupo;");
+            stmt.execute("DROP TABLE IF EXISTS Grupo;");
+            stmt.execute("DROP TABLE IF EXISTS Utilizador;");
+            stmt.execute("DROP TABLE IF EXISTS Despesa;");
+            stmt.execute("DROP TABLE IF EXISTS Convite;");
+            stmt.execute("DROP TABLE IF EXISTS DespesaUtilizador;");
+
+            System.out.println("Tabelas apagadas com sucesso.");
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao apagar tabelas: " + e.getMessage());
+        }
+    }
+
 
 }

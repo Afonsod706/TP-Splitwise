@@ -13,6 +13,7 @@ import baseDados.Config.GestorBaseDados;
 import java.io.*;
 import java.net.Socket;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -152,7 +153,11 @@ public class ClienteHandler implements Runnable {
             comunicacao.setResposta("Erro: Esta conta já está logada.");
         } else {
             UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
-            if (utilizadorCRUD.validarCredenciais(utilizador.getEmail(), utilizador.getPassword())) {
+
+            // Verificar se o email existe no banco de dados
+            if (!utilizadorCRUD.emailExiste(utilizador.getEmail())) {
+                comunicacao.setResposta("Erro: O email informado não está registrado.");
+            } else if (utilizadorCRUD.validarCredenciais(utilizador.getEmail(), utilizador.getPassword())) {
                 // Login bem-sucedido: Atualiza o estado do servidor
                 utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail());
                 usuariosLogados.put(utilizadorAutenticado.getEmail(), outObj); // Armazena o ObjectOutputStream
@@ -163,7 +168,7 @@ public class ClienteHandler implements Runnable {
                 autenticado = true;
                 exibirDados();
             } else {
-                comunicacao.setResposta("Erro: Email ou senha inválidos.");
+                comunicacao.setResposta("Erro: Senha inválida.");
             }
         }
 
@@ -175,7 +180,14 @@ public class ClienteHandler implements Runnable {
         Utilizador utilizador = comunicacao.getUtilizador();
         UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
 
-        if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
+        // Verifica se os campos obrigatórios estão preenchidos
+        if (utilizador.getNome() == null || utilizador.getNome().trim().isEmpty() ||
+                utilizador.getEmail() == null || utilizador.getEmail().trim().isEmpty() ||
+                utilizador.getPassword() == null || utilizador.getPassword().trim().isEmpty() ||
+                utilizador.getTelefone() == null || utilizador.getTelefone().trim().isEmpty()) {
+
+            comunicacao.setResposta("Erro: Todos os campos obrigatórios devem estar preenchidos (Nome, Email, Senha, Telemóvel).");
+        } else if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
             comunicacao.setResposta("Erro: Este email já está registrado.");
         } else if (utilizadorCRUD.adicionarUtilizador(utilizador)) {
             utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail()); // Atualiza o estado
@@ -185,6 +197,8 @@ public class ClienteHandler implements Runnable {
             autenticado = true;
             usuariosLogados.put(utilizadorAutenticado.getEmail(), outObj); // Armazena o ObjectOutputStream
             exibirDados();
+        } else {
+            comunicacao.setResposta("Erro: Não foi possível concluir o registro. Tente novamente.");
         }
 
         outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
@@ -195,19 +209,28 @@ public class ClienteHandler implements Runnable {
         Utilizador dadosAtualizados = comunicacao.getUtilizador();
         System.out.println("Solicitação de edição de dados para: " + dadosAtualizados.getEmail());
 
-        if (dadosAtualizados.getEmail() == null || dadosAtualizados.getEmail().isEmpty()) {
+        // Validações iniciais para campos obrigatórios
+        if (dadosAtualizados.getEmail() == null || dadosAtualizados.getEmail().trim().isEmpty()) {
             comunicacao.setResposta("Erro: Email inválido.");
+        } else if (dadosAtualizados.getNome() == null || dadosAtualizados.getNome().trim().isEmpty() ||
+                dadosAtualizados.getPassword() == null || dadosAtualizados.getPassword().trim().isEmpty() ||
+                dadosAtualizados.getTelefone() == null || dadosAtualizados.getTelefone().trim().isEmpty()) {
+            comunicacao.setResposta("Erro: Todos os campos obrigatórios devem estar preenchidos (Nome, Senha, Telemóvel).");
         } else if (!usuariosLogados.containsKey(dadosAtualizados.getEmail())) {
             comunicacao.setResposta("Erro: Usuário não está autenticado.");
         } else {
+            // Processa a atualização dos dados no banco de dados
             UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
             boolean atualizado = utilizadorCRUD.atualizarDados(dadosAtualizados);
 
             if (atualizado) {
                 comunicacao.setResposta("Dados atualizados com sucesso!");
-                utilizadorAutenticado = dadosAtualizados; // Atualiza os dados na sessão
+                // Atualiza os dados do utilizador autenticado na sessão
+                utilizadorAutenticado.setNome(dadosAtualizados.getNome());
+                utilizadorAutenticado.setPassword(dadosAtualizados.getPassword());
+                utilizadorAutenticado.setTelefone(dadosAtualizados.getTelefone());
             } else {
-                comunicacao.setResposta("Erro ao atualizar os dados.");
+                comunicacao.setResposta("Erro ao atualizar os dados. Tente novamente.");
             }
         }
 
@@ -685,6 +708,7 @@ public class ClienteHandler implements Runnable {
         despesa.setIdPagador(pagante.getId());
         despesa.setIdCriador(utilizadorAutenticado.getId());
 
+        // Inserir a despesa na base de dados
         DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
         boolean despesaInserida = despesaCRUD.criarDespesa(despesa);
 
@@ -710,6 +734,8 @@ public class ClienteHandler implements Runnable {
         boolean sucessoDivisao = true;
 
         UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+
+        // Incrementar o valor a receber do pagante
         boolean atualizadoPagante = utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), despesa.getValor());
         if (!atualizadoPagante) {
             comunicacao.setResposta("Erro ao atualizar o saldo a receber do pagante.");
@@ -718,6 +744,7 @@ public class ClienteHandler implements Runnable {
             return;
         }
 
+        // Atualizar os saldos dos membros
         for (int idMembro : idsMembrosGrupo) {
             Utilizador membro = utilizadorCRUD.buscarPorId(idMembro);
             if (membro == null) {
@@ -726,6 +753,7 @@ public class ClienteHandler implements Runnable {
                 break;
             }
 
+            // Incrementar o valor devido do membro
             boolean atualizadoDevido = utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), valorPorMembro);
             if (!atualizadoDevido) {
                 sucessoDivisao = false;
@@ -733,12 +761,12 @@ public class ClienteHandler implements Runnable {
                 break;
             }
 
+            // Inserir o detalhe da despesa para o membro
             boolean detalheInserido = utilizadorDespesaCRUD.criarDetalheParticipante(
                     despesa.getId(),
                     idMembro,
                     pagante.getId(),
-                    valorPorMembro,
-                    0.0
+                    valorPorMembro
             );
 
             if (!detalheInserido) {
@@ -747,6 +775,7 @@ public class ClienteHandler implements Runnable {
                 break;
             }
 
+            // Enviar notificação ao membro
             String mensagemNotificacao = String.format(
                     "Você tem uma nova despesa no grupo '%s'. Valor a pagar: %.2f€ para %s.",
                     grupoSelecionado.getNome(),
@@ -756,10 +785,10 @@ public class ClienteHandler implements Runnable {
             enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
         }
 
+        // Caso algo tenha dado errado, fazer rollback
         if (!sucessoDivisao) {
-            // Fazer rollback em caso de falha
-            utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), -despesa.getValor());
             idsMembrosGrupo.forEach(id -> utilizadorGrupoCRUD.incrementarValorDevido(id, grupoSelecionado.getIdGrupo(), -valorPorMembro));
+            utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), -despesa.getValor());
             comunicacao.setResposta("Erro ao dividir a despesa entre os membros do grupo. Operação cancelada.");
         } else {
             comunicacao.setResposta("Despesa adicionada com sucesso e dividida entre os membros do grupo.");
@@ -809,90 +838,68 @@ public class ClienteHandler implements Runnable {
             return;
         }
 
-        // Atualizar a descrição e o valor da despesa no banco de dados
-        boolean atualizado = despesaCRUD.atualizarDespesa(despesa);
-        if (!atualizado) {
-            comunicacao.setResposta("Erro ao atualizar a despesa.");
-            outObj.writeObject(comunicacao);
-            outObj.flush();
-            return;
-        }
-
         UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
         UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
 
-        // Recalcular os valores devidos e a receber para todos os membros
+        // Recuperar IDs dos membros do grupo
         List<Integer> idsMembrosGrupo = utilizadorDespesaCRUD.listarIdsMembrosDoGrupo(despesaOriginal.getIdGrupo());
-        idsMembrosGrupo.remove((Integer) despesaOriginal.getIdPagador()); // Remove o pagador do cálculo
+        idsMembrosGrupo.removeIf(id -> id == despesaOriginal.getIdPagador()); // Remove o pagador
 
+        double valorOriginalPorMembro = despesaOriginal.getValor() / idsMembrosGrupo.size();
         double novoValorPorMembro = despesa.getValor() / idsMembrosGrupo.size();
-        boolean sucessoAtualizacao = true;
+        boolean sucesso = true;
 
-        for (int idMembro : idsMembrosGrupo) {
-            try {
-                // Calcula ajustes
-                double valorDevidoAnterior = utilizadorDespesaCRUD.obterValorDevidoPorMembro(despesaOriginal.getId(), idMembro);
-                double ajusteDevido = novoValorPorMembro - valorDevidoAnterior;
+        try {
+            // Reverter valores antigos para os membros
+            for (int idMembro : idsMembrosGrupo) {
+                utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), -valorOriginalPorMembro);
+            }
+            utilizadorGrupoCRUD.incrementarValorReceber(despesaOriginal.getIdPagador(), grupoSelecionado.getIdGrupo(), -despesaOriginal.getValor());
 
-                // Atualiza a tabela DespesaUtilizador
-                boolean atualizadoDevido = utilizadorDespesaCRUD.atualizarValorDevido(despesaOriginal.getId(), idMembro, novoValorPorMembro);
-                if (!atualizadoDevido) {
-                    sucessoAtualizacao = false;
-                    break;
+            // Atualizar a despesa no banco de dados
+            if (!despesaCRUD.atualizarDespesa(despesa)) {
+                throw new SQLException("Erro ao atualizar os dados da despesa.");
+            }
+
+            // Atualizar valores com a nova despesa
+            for (int idMembro : idsMembrosGrupo) {
+                utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), novoValorPorMembro);
+                utilizadorDespesaCRUD.atualizarValorDevido(despesa.getId(), idMembro, novoValorPorMembro);
+            }
+            utilizadorGrupoCRUD.incrementarValorReceber(despesaOriginal.getIdPagador(), grupoSelecionado.getIdGrupo(), despesa.getValor());
+
+        } catch (Exception e) {
+            sucesso = false;
+            // Reverter valores em caso de erro
+            for (int idMembro : idsMembrosGrupo) {
+                utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), valorOriginalPorMembro);
+            }
+            utilizadorGrupoCRUD.incrementarValorReceber(despesaOriginal.getIdPagador(), grupoSelecionado.getIdGrupo(), despesaOriginal.getValor());
+        }
+
+        if (sucesso) {
+            // Notificar os membros do grupo sobre a atualização
+            for (int idMembro : idsMembrosGrupo) {
+                Utilizador membro = new UtilizadorCRUD(gestorBaseDados.getConexao()).buscarPorId(idMembro);
+                if (membro != null && usuariosLogados.containsKey(membro.getEmail())) {
+                    String mensagemNotificacao = String.format(
+                            "A despesa '%s' no grupo '%s' foi atualizada. Novo valor: %.2f€, Nova descrição: '%s'.",
+                            despesaOriginal.getDescricao(),
+                            grupoSelecionado.getNome(),
+                            despesa.getValor(),
+                            despesa.getDescricao()
+                    );
+                    enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
                 }
-
-                // Atualiza o valor devido na tabela UtilizadorGrupo
-                boolean atualizadoGrupo = utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), ajusteDevido);
-                if (!atualizadoGrupo) {
-                    sucessoAtualizacao = false;
-                    break;
-                }
-            } catch (Exception e) {
-                sucessoAtualizacao = false;
-                break;
             }
-        }
-
-        if (sucessoAtualizacao) {
-            // Recalcular o valor a receber para o pagador
-            double novoValorReceber = despesa.getValor();
-            double valorReceberAnterior = utilizadorDespesaCRUD.obterValorReceberPorMembro(despesaOriginal.getId(), despesaOriginal.getIdPagador());
-            double ajusteReceber = novoValorReceber - valorReceberAnterior;
-
-            utilizadorDespesaCRUD.atualizarValorAReceber(despesaOriginal.getId(), despesaOriginal.getIdPagador(), novoValorReceber);
-
-            // Atualizar o valor a receber do pagador na tabela `utilizador_grupo`
-            boolean atualizadoPagador = utilizadorGrupoCRUD.incrementarValorReceber(despesaOriginal.getIdPagador(), grupoSelecionado.getIdGrupo(), ajusteReceber);
-            if (!atualizadoPagador) {
-                sucessoAtualizacao = false;
-            }
-        }
-
-        // Enviar notificações
-        for (int idMembro : idsMembrosGrupo) {
-            Utilizador membro = new UtilizadorCRUD(gestorBaseDados.getConexao()).buscarPorId(idMembro);
-            if (membro != null && usuariosLogados.containsKey(membro.getEmail())) {
-                String mensagemNotificacao = String.format(
-                        "A despesa '%s' no grupo '%s' foi atualizada. Novo valor: %.2f€, Nova descrição: '%s'.",
-                        despesaOriginal.getDescricao(),
-                        grupoSelecionado.getNome(),
-                        despesa.getValor(),
-                        despesa.getDescricao()
-                );
-                enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
-            }
-        }
-
-        if (sucessoAtualizacao) {
             comunicacao.setResposta("Despesa atualizada com sucesso e notificações enviadas.");
         } else {
-            comunicacao.setResposta("Erro ao atualizar a despesa. Operação parcialmente concluída.");
+            comunicacao.setResposta("Erro ao atualizar a despesa. Operação revertida.");
         }
 
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
-
 
     private void processarEliminacaoDespesa(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
@@ -942,14 +949,24 @@ public class ClienteHandler implements Runnable {
         UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
         List<Integer> idsMembrosGrupo = utilizadorDespesaCRUD.listarIdsMembrosDoGrupo(despesa.getIdGrupo());
 
+        // Valor total que o pagador deve deixar de receber
+        double valorTotalAReceberPagador = 0.0;
+
         for (int idMembro : idsMembrosGrupo) {
             double valorDevido = utilizadorDespesaCRUD.obterValorDevidoPorMembro(despesa.getId(), idMembro);
-            double valorReceber = utilizadorDespesaCRUD.obterValorReceberPorMembro(despesa.getId(), idMembro);
 
-            // Ajusta os saldos
+            // Ajustar o valor devido dos membros
             utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), -valorDevido);
-            utilizadorGrupoCRUD.incrementarValorReceber(idMembro, grupoSelecionado.getIdGrupo(), -valorReceber);
+
+            // Acumular o total que o pagador deixou de receber
+            valorTotalAReceberPagador += valorDevido;
         }
+
+        // Ajustar o valor a receber do pagador
+        utilizadorGrupoCRUD.incrementarValorReceber(despesa.getIdPagador(), grupoSelecionado.getIdGrupo(), -valorTotalAReceberPagador);
+
+        // Remover detalhes da despesa da tabela `DespesaUtilizador`
+        utilizadorDespesaCRUD.deletarParticipantesDaDespesa(despesa.getId());
 
         // Notifica os membros do grupo sobre a exclusão da despesa
         for (int idMembro : idsMembrosGrupo) {
@@ -968,7 +985,6 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
-
 
     // ===========================
     // SEÇÃO: FECHAMENTO DE CONEXÃO

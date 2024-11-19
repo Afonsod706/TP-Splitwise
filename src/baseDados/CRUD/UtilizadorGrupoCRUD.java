@@ -229,7 +229,7 @@ public class UtilizadorGrupoCRUD {
         return 0.0;
     }
 
-    public boolean atualizarSaldoDevido(int idUtilizador, int idGrupo, double valor) {
+    public boolean atualizarValorDevidoGrupo(int idUtilizador, int idGrupo, double valor) {
         String sql = "UPDATE utilizador_grupo SET valor_devido = valor_devido + ? WHERE id_utilizador = ? AND id_grupo = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setDouble(1, valor);
@@ -242,7 +242,7 @@ public class UtilizadorGrupoCRUD {
         }
     }
 
-    public boolean atualizarSaldoReceber(int idUtilizador, int idGrupo, double valor) {
+    public boolean atualizarValorReceberGrupo(int idUtilizador, int idGrupo, double valor) {
         String sql = "UPDATE utilizador_grupo SET valor_a_receber = valor_a_receber + ? WHERE id_utilizador = ? AND id_grupo = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setDouble(1, valor);
@@ -280,7 +280,5 @@ public class UtilizadorGrupoCRUD {
             return false;
         }
     }
-
-
 
 }

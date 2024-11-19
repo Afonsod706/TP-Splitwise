@@ -14,14 +14,13 @@ public class UtilizadorDespesaCRUD {
     }
 
     // Associa um utilizador a uma despesa com o valor devido e o remetente
-    public boolean criarDetalheParticipante(int idDespesa, int idUtilizador, int idRemetente, double valorDevido, double valorAReceber) {
-        String sql = "INSERT INTO DespesaUtilizador (id_despesa, id_utilizador, id_remetente, valor_devido, valor_a_receber) VALUES (?, ?, ?, ?, ?)";
+    public boolean criarDetalheParticipante(int idDespesa, int idUtilizador, int idRemetente, double valorDevido) {
+        String sql = "INSERT INTO DespesaUtilizador (id_despesa, id_utilizador, id_remetente, valor_devido) VALUES (?, ?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idDespesa);
             pstmt.setInt(2, idUtilizador);
             pstmt.setInt(3, idRemetente);
             pstmt.setDouble(4, valorDevido);
-            pstmt.setDouble(5, valorAReceber);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
@@ -41,8 +40,7 @@ public class UtilizadorDespesaCRUD {
                         rs.getInt("id_despesa"),
                         rs.getInt("id_utilizador"),
                         rs.getInt("id_remetente"),
-                        rs.getDouble("valor_devido"),
-                        rs.getDouble("valor_a_receber")
+                        rs.getDouble("valor_devido")
                 ));
             }
         } catch (SQLException e) {
@@ -58,20 +56,6 @@ public class UtilizadorDespesaCRUD {
             pstmt.setDouble(1, novoValorDevido);
             pstmt.setInt(2, idDespesa);
             pstmt.setInt(3, idUtilizador);
-            return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    // Atualiza o valor a receber de um remetente
-    public boolean atualizarValorAReceber(int idDespesa, int idRemetente, double novoValorAReceber) {
-        String sql = "UPDATE DespesaUtilizador SET valor_a_receber = ? WHERE id_despesa = ? AND id_remetente = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setDouble(1, novoValorAReceber);
-            pstmt.setInt(2, idDespesa);
-            pstmt.setInt(3, idRemetente);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
@@ -150,21 +134,27 @@ public class UtilizadorDespesaCRUD {
         return 0.0; // Retorna 0.0 caso não encontre o valor ou ocorra algum erro
     }
 
-    // Obtém o valor a receber por um membro em uma despesa específica
-    public double obterValorReceberPorMembro(int idDespesa, int idMembro) {
-        String sql = "SELECT valor_a_receber FROM DespesaUtilizador WHERE id_despesa = ? AND id_remetente = ?";
+    // Soma os valores devidos por um membro em todas as despesas de um grupo
+    public double somarValoresDevidosPorGrupo(int idMembro, int idGrupo) {
+        String sql = """
+        SELECT SUM(du.valor_devido) AS total_devido
+        FROM DespesaUtilizador du
+        INNER JOIN Despesa d ON du.id_despesa = d.id_despesa
+        WHERE du.id_utilizador = ? AND d.id_grupo = ?
+        """;
+
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, idDespesa);
-            pstmt.setInt(2, idMembro);
+            pstmt.setInt(1, idMembro); // Define o ID do membro
+            pstmt.setInt(2, idGrupo);  // Define o ID do grupo
+
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return rs.getDouble("valor_a_receber");
+                return rs.getDouble("total_devido"); // Retorna a soma dos valores devidos
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return 0.0; // Retorna 0.0 caso não encontre o valor ou ocorra algum erro
+
+        return 0.0; // Retorna 0.0 caso nenhum valor seja encontrado ou ocorra um erro
     }
-
-
 }
