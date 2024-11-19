@@ -1,104 +1,92 @@
-package Servidor.src;
+package Servidor_backup;
 
 import java.io.*;
-import java.net.*;
-import java.sql.*;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
+import java.net.Socket;
+import java.time.LocalDateTime;
 
 public class ServidorBackup {
-    private static final String MULTICAST_ADDRESS = "230.44.44.44";
-    private static final int MULTICAST_PORT = 4444;
-    private static final String BACKUP_DB_PATH = "src/baseDados/backup.db";
+    private static final String MULTICAST_GROUP = "230.0.0.1"; // Grupo Multicast
+    private static final int MULTICAST_PORT = 4446; // Porta Multicast
+    private static final int TCP_PORT = 5002; // Porta para conectar ao servidor principal
+    private static final String BACKUP_FOLDER = "src/Servidor_backup/baseDadosBackUp"; // Pasta onde os backups serão armazenados
 
     public static void main(String[] args) {
-        inicializarBaseDeDados(); // Garante que a estrutura básica da base exista
+        // Criar pasta para backups, se ainda não existir
+        File backupFolder = new File(BACKUP_FOLDER);
+        if (!backupFolder.exists()) {
+            backupFolder.mkdir();
+        }
 
+        // Thread para escutar Heartbeats via Multicast
+        new Thread(ServidorBackup::escutarHeartbeats).start();
+    }
+
+    // Escuta mensagens Multicast (Heartbeats) do servidor principal
+    private static void escutarHeartbeats() {
         try (MulticastSocket socket = new MulticastSocket(MULTICAST_PORT)) {
-            InetAddress group = InetAddress.getByName(MULTICAST_ADDRESS);
+            InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
             socket.joinGroup(group);
+            System.out.println("Servidor Backup: Escutando heartbeats no grupo " + MULTICAST_GROUP + " na porta " + MULTICAST_PORT);
 
-            System.out.println("Servidor backup iniciado. Aguardando heartbeats...");
-
+            byte[] buffer = new byte[256];
             while (true) {
-                DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
+                String message = new String(packet.getData(), 0, packet.getLength());
 
-                String mensagem = new String(packet.getData(), 0, packet.getLength());
-                System.out.println("Heartbeat recebido: " + mensagem);
-
-                // Processar o heartbeat
-                if (mensagem.contains("Versao")) {
-                    String[] partes = mensagem.split(",");
-                    int versaoRecebida = Integer.parseInt(partes[0].split(":")[1].trim());
-                    int portaPrincipal = Integer.parseInt(partes[1].split(":")[1].trim());
-
-                    // Obter base de dados inicial via TCP, se necessário
-                    verificarVersao(versaoRecebida, portaPrincipal);
+                if ("HEARTBEAT".equalsIgnoreCase(message.trim())) {
+                    System.out.println("Heartbeat recebido: " + LocalDateTime.now());
+                    realizarBackup();
                 }
             }
         } catch (IOException e) {
-            System.err.println("Erro no servidor de backup: " + e.getMessage());
+            System.err.println("Erro ao escutar heartbeats: " + e.getMessage());
         }
     }
 
-    private static void inicializarBaseDeDados() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + BACKUP_DB_PATH);
-             Statement stmt = conn.createStatement()) {
-            String sqlVersion = """
-                CREATE TABLE IF NOT EXISTS Version (
-                    version INTEGER
-                );
-            """;
-            stmt.execute(sqlVersion);
+    // Realiza o backup ao receber um heartbeat
+    private static void realizarBackup() {
+        System.out.println("Iniciando processo de backup...");
 
-            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) AS count FROM Version");
-            if (rs.next() && rs.getInt("count") == 0) {
-                stmt.execute("INSERT INTO Version (version) VALUES (0)");
-                System.out.println("Base de dados backup inicializada com versão 0.");
-            }
-        } catch (SQLException e) {
-            System.err.println("Erro ao inicializar a base de dados backup: " + e.getMessage());
-        }
-    }
+        try (Socket socket = new Socket("localhost", TCP_PORT); // Conecta ao servidor principal
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-    private static void verificarVersao(int versaoRecebida, int portaPrincipal) {
-        int versaoAtual = obterVersaoLocal();
-
-        if (versaoAtual == 0 || versaoRecebida > versaoAtual) {
-            System.out.println("Versão desatualizada. Sincronizando base de dados...");
-            sincronizarBaseDeDados(portaPrincipal);
-        }
-    }
-
-    private static int obterVersaoLocal() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + BACKUP_DB_PATH);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT version FROM Version")) {
-
-            if (rs.next()) {
-                return rs.getInt("version");
-            }
-        } catch (SQLException e) {
-            System.err.println("Erro ao obter versão local: " + e.getMessage());
-        }
-        return 0;
-    }
-
-    private static void sincronizarBaseDeDados(int portaPrincipal) {
-        try (Socket socket = new Socket("localhost", portaPrincipal);
-             InputStream in = socket.getInputStream();
-             FileOutputStream out = new FileOutputStream(BACKUP_DB_PATH)) {
-
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
+            // Recebe o caminho da base de dados principal
+            String originalDb = in.readLine();
+            if (originalDb == null || originalDb.isEmpty()) {
+                System.err.println("Caminho da base de dados não recebido.");
+                return;
             }
 
-            System.out.println("Base de dados sincronizada com sucesso. Arquivo salvo em: " + BACKUP_DB_PATH);
+            // Define o nome único para o backup com timestamp
+            String timestamp = LocalDateTime.now().toString().replace(":", "-").replace("T", "_");
+            String backupDb = BACKUP_FOLDER + File.separator + "backup_" + timestamp + ".db";
+
+            // Copia a base de dados
+            duplicarBaseDados(originalDb, backupDb);
+            System.out.println("Backup concluído: " + backupDb);
 
         } catch (IOException e) {
-            System.err.println("Erro ao sincronizar base de dados: " + e.getMessage());
+            System.err.println("Erro durante o backup: " + e.getMessage());
+        }
+    }
+
+    // Método para duplicar a base de dados SQLite
+    private static void duplicarBaseDados(String originalDb, String backupDb) {
+        try (InputStream input = new FileInputStream(originalDb);
+             OutputStream output = new FileOutputStream(backupDb)) {
+
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = input.read(buffer)) > 0) {
+                output.write(buffer, 0, length);
+            }
+            System.out.println("Base de dados duplicada com sucesso.");
+        } catch (IOException e) {
+            System.err.println("Erro ao duplicar base de dados: " + e.getMessage());
         }
     }
 }
