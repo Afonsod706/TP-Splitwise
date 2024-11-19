@@ -196,4 +196,91 @@ public class UtilizadorGrupoCRUD {
         return false;
     }
 
+    //*********
+    //Manipulação de valores Devido e receber
+    //*********
+    public double obterValorDevido(int idUtilizador, int idGrupo) {
+        String sql = "SELECT valor_devido FROM utilizador_grupo WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idUtilizador);
+            pstmt.setInt(2, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("valor_devido");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0;
+    }
+
+    public double obterValorReceber(int idUtilizador, int idGrupo) {
+        String sql = "SELECT valor_a_receber FROM utilizador_grupo WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idUtilizador);
+            pstmt.setInt(2, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("valor_a_receber");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0;
+    }
+
+    public boolean atualizarSaldoDevido(int idUtilizador, int idGrupo, double valor) {
+        String sql = "UPDATE utilizador_grupo SET valor_devido = valor_devido + ? WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, valor);
+            pstmt.setInt(2, idUtilizador);
+            pstmt.setInt(3, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean atualizarSaldoReceber(int idUtilizador, int idGrupo, double valor) {
+        String sql = "UPDATE utilizador_grupo SET valor_a_receber = valor_a_receber + ? WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, valor);
+            pstmt.setInt(2, idUtilizador);
+            pstmt.setInt(3, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean incrementarValorDevido(int idUtilizador, int idGrupo, double incremento) {
+        String sql = "UPDATE utilizador_grupo SET valor_devido = valor_devido + ? WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, incremento);
+            pstmt.setInt(2, idUtilizador);
+            pstmt.setInt(3, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean incrementarValorReceber(int idUtilizador, int idGrupo, double incremento) {
+        String sql = "UPDATE utilizador_grupo SET valor_a_receber = valor_a_receber + ? WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, incremento);
+            pstmt.setInt(2, idUtilizador);
+            pstmt.setInt(3, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+
 }

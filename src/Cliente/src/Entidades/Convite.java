@@ -35,6 +35,10 @@ public class Convite implements Serializable {
 
     }
 
+    public Convite(String emailConvidado) {
+        this.emailConvidado = emailConvidado;
+    }
+
     // Getters e Setters (incluindo o novo campo emailConvidado)
     public String getEmailConvidado() {
         return emailConvidado;

@@ -10,6 +10,7 @@ public class Despesa implements Serializable {
     private String descricao;
     private double valor;
     private int idPagador;
+    private String emailPagante;
 
     // Construtores, getters e setters
     public Despesa(int id, int idGrupo, int idCriador, String data, String descricao, double valor, int idPagador) {
@@ -52,4 +53,9 @@ public class Despesa implements Serializable {
     public void setDescricao(String descricao) { this.descricao = descricao; }
     public void setValor(double valor) { this.valor = valor; }
     public void setIdPagador(int idPagador) { this.idPagador = idPagador; }
+
+    public String getEmailPagante() {
+        return emailPagante;
+    }
+    public void setEmailPagante(String emailPagante) { this.emailPagante = emailPagante; }
 }

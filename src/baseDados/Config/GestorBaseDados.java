@@ -12,12 +12,12 @@ public class GestorBaseDados {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-        String url = "jdbc:sqlite:src/baseDados/baseDados2.db"; // Caminho da base de dados
+        String url = "jdbc:sqlite:src/baseDados/baseDados3.db"; // Caminho da base de dados
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
+            //limparDadosTeste();
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
-            inserirDadosTeste();
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
         }
@@ -194,7 +194,7 @@ public class GestorBaseDados {
     }
 
     public void inserirDadosTeste() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados2.db");
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados3.db");
              Statement stmt = conn.createStatement()) {
 
             // Limpar dados anteriores
@@ -234,13 +234,17 @@ public class GestorBaseDados {
         }
     }
     public void limparDadosTeste() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados2.db");
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados3.db");
              Statement stmt = conn.createStatement()) {
 
             // Limpar dados inseridos
             stmt.execute("DELETE FROM utilizador_grupo;");
             stmt.execute("DELETE FROM Grupo;");
             stmt.execute("DELETE FROM Utilizador;");
+            stmt.execute("DELETE FROM Despesa;");
+            stmt.execute("DELETE FROM Convite;");
+            stmt.execute("DELETE FROM DespesaUtilizador;");
+
 
             System.out.println("Dados de teste removidos com sucesso.");
 

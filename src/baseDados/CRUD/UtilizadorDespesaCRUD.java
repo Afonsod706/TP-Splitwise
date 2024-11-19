@@ -1,6 +1,5 @@
 package baseDados.CRUD;
 
-
 import Cliente.src.Entidades.UtilizadorDespesa;
 
 import java.sql.*;
@@ -14,13 +13,15 @@ public class UtilizadorDespesaCRUD {
         this.connection = connection;
     }
 
-    // Associa um utilizador a uma despesa com o valor devido
-    public boolean criarDetalheParticipante(int idDespesa, int idUtilizador, double valorDevido) {
-        String sql = "INSERT INTO detalhes_participantes (id_despesa, id_utilizador, valor_devido) VALUES (?, ?, ?)";
+    // Associa um utilizador a uma despesa com o valor devido e o remetente
+    public boolean criarDetalheParticipante(int idDespesa, int idUtilizador, int idRemetente, double valorDevido, double valorAReceber) {
+        String sql = "INSERT INTO DespesaUtilizador (id_despesa, id_utilizador, id_remetente, valor_devido, valor_a_receber) VALUES (?, ?, ?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idDespesa);
             pstmt.setInt(2, idUtilizador);
-            pstmt.setDouble(3, valorDevido);
+            pstmt.setInt(3, idRemetente);
+            pstmt.setDouble(4, valorDevido);
+            pstmt.setDouble(5, valorAReceber);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
@@ -31,7 +32,7 @@ public class UtilizadorDespesaCRUD {
     // Lê todas as despesas associadas a um utilizador
     public List<UtilizadorDespesa> listarDespesasPorUtilizador(int idUtilizador) {
         List<UtilizadorDespesa> detalhes = new ArrayList<>();
-        String sql = "SELECT * FROM detalhes_participantes WHERE id_utilizador = ?";
+        String sql = "SELECT * FROM DespesaUtilizador WHERE id_utilizador = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idUtilizador);
             ResultSet rs = pstmt.executeQuery();
@@ -39,7 +40,9 @@ public class UtilizadorDespesaCRUD {
                 detalhes.add(new UtilizadorDespesa(
                         rs.getInt("id_despesa"),
                         rs.getInt("id_utilizador"),
-                        rs.getDouble("valor_devido")
+                        rs.getInt("id_remetente"),
+                        rs.getDouble("valor_devido"),
+                        rs.getDouble("valor_a_receber")
                 ));
             }
         } catch (SQLException e) {
@@ -50,7 +53,7 @@ public class UtilizadorDespesaCRUD {
 
     // Atualiza o valor devido de um utilizador em uma despesa
     public boolean atualizarValorDevido(int idDespesa, int idUtilizador, double novoValorDevido) {
-        String sql = "UPDATE detalhes_participantes SET valor_devido = ? WHERE id_despesa = ? AND id_utilizador = ?";
+        String sql = "UPDATE DespesaUtilizador SET valor_devido = ? WHERE id_despesa = ? AND id_utilizador = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setDouble(1, novoValorDevido);
             pstmt.setInt(2, idDespesa);
@@ -62,9 +65,23 @@ public class UtilizadorDespesaCRUD {
         }
     }
 
+    // Atualiza o valor a receber de um remetente
+    public boolean atualizarValorAReceber(int idDespesa, int idRemetente, double novoValorAReceber) {
+        String sql = "UPDATE DespesaUtilizador SET valor_a_receber = ? WHERE id_despesa = ? AND id_remetente = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, novoValorAReceber);
+            pstmt.setInt(2, idDespesa);
+            pstmt.setInt(3, idRemetente);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     // Remove a associação entre um utilizador e uma despesa
     public boolean deletarDetalheParticipante(int idDespesa, int idUtilizador) {
-        String sql = "DELETE FROM detalhes_participantes WHERE id_despesa = ? AND id_utilizador = ?";
+        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idDespesa);
             pstmt.setInt(2, idUtilizador);
@@ -77,7 +94,7 @@ public class UtilizadorDespesaCRUD {
 
     // Remove todos os participantes associados a uma despesa específica
     public void deletarParticipantesDaDespesa(int idDespesa) {
-        String sql = "DELETE FROM detalhes_participantes WHERE id_despesa = ?";
+        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, idDespesa);
             pstmt.executeUpdate();
@@ -116,5 +133,38 @@ public class UtilizadorDespesaCRUD {
         }
         return idsMembros;
     }
+
+    // Obtém o valor devido por um membro em uma despesa específica
+    public double obterValorDevidoPorMembro(int idDespesa, int idMembro) {
+        String sql = "SELECT valor_devido FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDespesa);
+            pstmt.setInt(2, idMembro);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("valor_devido");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0; // Retorna 0.0 caso não encontre o valor ou ocorra algum erro
+    }
+
+    // Obtém o valor a receber por um membro em uma despesa específica
+    public double obterValorReceberPorMembro(int idDespesa, int idMembro) {
+        String sql = "SELECT valor_a_receber FROM DespesaUtilizador WHERE id_despesa = ? AND id_remetente = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDespesa);
+            pstmt.setInt(2, idMembro);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("valor_a_receber");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0; // Retorna 0.0 caso não encontre o valor ou ocorra algum erro
+    }
+
 
 }

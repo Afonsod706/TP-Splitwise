@@ -1,6 +1,8 @@
 
 package Cliente.src.recursos;
 
+import Cliente.src.Entidades.Convite;
+import Cliente.src.Entidades.Despesa;
 import Cliente.src.Entidades.Grupo;
 import Cliente.src.Entidades.Utilizador;
 
@@ -17,6 +19,8 @@ public class Comunicacao implements Serializable {
     private Comandos comando;
     private List<Grupo> grupos;
     private Grupo grupo;
+    private Convite convite;
+    private Despesa despesa;
 
     // Construtores
     public Comunicacao(String pedido, Utilizador utilizador) {
@@ -77,6 +81,22 @@ public class Comunicacao implements Serializable {
 
     public void setComando(Comandos comando) {
         this.comando = comando;
+    }
+
+    public Convite getConvite() {
+        return convite;
+    }
+
+    public void setConvite(Convite convite) {
+        this.convite = convite;
+    }
+
+    public Despesa getDespesa() {
+        return despesa;
+    }
+
+    public void setDespesa(Despesa despesa) {
+        this.despesa = despesa;
     }
 
 //    public void adicionarGrupo(Grupo grupo) {

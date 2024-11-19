@@ -8,7 +8,7 @@ public class UtilizadorDespesa implements Serializable {
     private int idUtilizador;
     private double valorDevido;
 
-    public UtilizadorDespesa(int idDespesa, int idUtilizador, double valorDevido) {
+    public UtilizadorDespesa(int idDespesa, int idUtilizador, double valorDevido, double valor_devido, double valorAReceber) {
         this.idDespesa = idDespesa;
         this.idUtilizador = idUtilizador;
         this.valorDevido = valorDevido;

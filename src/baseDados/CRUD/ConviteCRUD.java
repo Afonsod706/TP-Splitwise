@@ -1,6 +1,7 @@
 package baseDados.CRUD;
 
 import Cliente.src.Entidades.Convite;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,7 @@ public class ConviteCRUD {
         }
         return convites;
     }
+
     public Convite buscarConvitePorId(int idConvite) {
         String sql = "SELECT * FROM Convite WHERE id_convite = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
@@ -126,4 +128,17 @@ public class ConviteCRUD {
     }
 
 
+    public boolean criarConvite(int idUtilizadorConvite, int idGrupo, int idUtilizadorConvidado) {
+        String sql = "INSERT INTO Convite (id_utilizador_convite,id_grupo,id_utilizador_convidado,estado,data_envio,data_resposta) VALUES (?,?,?,'pendente',datetime('now'),'----------')";
+
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idUtilizadorConvite);
+            pstmt.setInt(2, idGrupo);
+            pstmt.setInt(3, idUtilizadorConvidado);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }

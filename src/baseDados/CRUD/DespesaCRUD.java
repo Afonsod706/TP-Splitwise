@@ -33,7 +33,7 @@ public class DespesaCRUD {
         return false;
     }
 
-    public Despesa lerDespesaPorId(int id) {
+    public Despesa buscarDespesaPorId(int id) {
         String sql = "SELECT * FROM Despesa WHERE id_despesa = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, id);
@@ -66,7 +66,7 @@ public class DespesaCRUD {
         }
     }
 
-    public boolean deletarDespesa(int id) {
+    public boolean eliminarDespesa(int id) {
         String sql = "DELETE FROM Despesa WHERE id_despesa = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, id);
@@ -126,4 +126,6 @@ public class DespesaCRUD {
         }
         return despesas;
     }
+
+
 }

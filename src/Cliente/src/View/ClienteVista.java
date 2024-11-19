@@ -1,5 +1,7 @@
 package Cliente.src.View;
 
+import Cliente.src.Entidades.Convite;
+import Cliente.src.Entidades.Despesa;
 import Cliente.src.Entidades.Grupo;
 import Cliente.src.Entidades.Utilizador;
 import Cliente.src.Network.ClienteComunicacao;
@@ -63,12 +65,16 @@ public class ClienteVista {
                         enviarRegistro(userInput);
                         return;
                     case "3":
-                        Comunicacao novoComunicacao = new Comunicacao();
-                        novoComunicacao.setComando(Comandos.SAIR);
-                        comunicacaoServidor.enviarMensagem(novoComunicacao);
-                        System.out.println("Encerrando o cliente...");
-                        comunicacaoServidor.encerrar();
-                        System.exit(0); // Encerra o programa
+
+                        try {
+                            Comunicacao novoComunicacao = new Comunicacao();
+                            novoComunicacao.setComando(Comandos.SAIR);
+                            comunicacaoServidor.enviarMensagem(novoComunicacao);
+                            System.out.println("Encerrando o cliente...");
+                            comunicacaoServidor.encerrar();
+                        } finally {
+                            System.exit(0); // Garante que o programa será encerrado
+                        }
                         break;
                     default:
                         System.out.println("Comando inválido. Tente novamente.");
@@ -94,7 +100,13 @@ public class ClienteVista {
                 System.out.println("6. Editar Nome grupo");
                 System.out.println("7. Sair do grupo");
                 System.out.println("8. Eliminar grupo");
-                System.out.println("9. Logout");
+                System.out.println("9. Criar convite");
+                System.out.println("10. Visualizar convites");
+                System.out.println("11. Responder a convite");
+                System.out.println("12. Criar despesa");
+                System.out.println("13. Editar despesa");
+                System.out.println("14. Eliminar despesa");
+                System.out.println("15. Logout");
                 System.out.print("Escolha uma opção: ");
                 String input = userInput.readLine();
 
@@ -124,13 +136,33 @@ public class ClienteVista {
                         eliminarGrupo();
                         break;
                     case "9":
-                        Comunicacao novoComunicacao = new Comunicacao();
-                        novoComunicacao.setComando(Comandos.SAIR);
-                        comunicacaoServidor.enviarMensagem(novoComunicacao);
-                        System.out.println("Encerrando o cliente...");
-                        comunicacaoServidor.encerrar();
-                        System.exit(0); // Encerra o programa
-                        return; // Retorna ao menu de autenticação
+                        criarConvite();
+                        break;
+                    case "10":
+                        visualizarConvites();
+                        break;
+                    case "11":
+                        responderConvite();
+                        break;
+                    case "12":
+                        criarDespesa();
+                        break;
+                    case "13":
+                        editarDespesa(); // Tratar edição de despesa
+                        break;
+                    case "14":
+                        eliminarDespesa(); // Tratar eliminação de despesa
+                        break;
+                    case "15":
+                        try {
+                            Comunicacao novoComunicacao = new Comunicacao();
+                            novoComunicacao.setComando(Comandos.SAIR);
+                            comunicacaoServidor.enviarMensagem(novoComunicacao);
+                            System.out.println("Encerrando o cliente...");
+                            comunicacaoServidor.encerrar();
+                        } finally {
+                            System.exit(0); // Garante que o programa será encerrado
+                        }
                     default:
                         System.out.println("Comando inválido. Tente novamente.");
                 }
@@ -138,6 +170,171 @@ public class ClienteVista {
         } catch (IOException e) {
             System.err.println("Erro ao processar entrada do usuário MenuPrincipal: " + e.getMessage());
         }
+    }
+
+    private void eliminarDespesa() throws IOException {
+        System.out.println("Digite o ID da despesa que deseja eliminar:");
+        int idDespesa;
+        try {
+            idDespesa = Integer.parseInt(userInput.readLine());
+        } catch (NumberFormatException e) {
+            System.out.println("Erro: ID inválido. Operação cancelada.");
+            return;
+        }
+
+        // Cria o objeto despesa apenas com o ID
+        Despesa despesa = new Despesa();
+        despesa.setId(idDespesa);
+
+        // Prepara e envia a comunicação
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.ELIMINAR_DESPESA);
+        novoComunicacao.setDespesa(despesa);
+
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para eliminar despesa enviada ao servidor. Aguarde resposta...");
+    }
+
+
+    private void editarDespesa() throws IOException {
+        System.out.println("Digite o ID da despesa que seja editar:");
+        int idDespesa = 0;
+        try {
+            idDespesa=Integer.parseInt(userInput.readLine());
+        }catch (NumberFormatException e) {
+            System.out.println("erro:ID invalido.Operação Invalida");
+        }
+
+        System.out.println("Digite a nova descrição da despesa:");
+        String descricaoDespesa= userInput.readLine();
+        System.out.println("Digite o novo valor do despesa:");
+        double valorDespesa;
+        try{
+            valorDespesa= Double.parseDouble(userInput.readLine());
+        } catch (NumberFormatException e) {
+            System.out.println("erro:Valor invalido deve ser um numero:"+e.getMessage());
+            return;
+        }
+
+        Despesa novaDespesa=new Despesa();
+        novaDespesa.setDescricao(descricaoDespesa);
+        novaDespesa.setValor(valorDespesa);
+        novaDespesa.setId(idDespesa);
+
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.EDITAR_DESPESA);
+        novoComunicacao.setDespesa(novaDespesa);
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para editar despesa enviada ao servidor. Aguarde resposta...");
+    }
+
+    private void criarDespesa() throws IOException {
+        System.out.println("Digite a descrição da despesa:");
+        String descricao = userInput.readLine();
+        System.out.println("Digite o valor da despesa:");
+        double valor;
+        try {
+            valor = Double.parseDouble(userInput.readLine());
+        } catch (NumberFormatException e) {
+            System.out.println("Erro: Valor inválido. Operação cancelada.");
+            return;
+        }
+
+        System.out.println("Digite o email do pagador:");
+        String emailPagador = userInput.readLine();
+
+        // Cria a despesa com as informações fornecidas
+        Despesa despesa = new Despesa();
+        despesa.setDescricao(descricao);
+        despesa.setValor(valor);
+        despesa.setEmailPagante(emailPagador);
+
+        // Configura a comunicação
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.INSERIR_DESPESA);
+        novoComunicacao.setDespesa(despesa);
+
+        // Envia ao servidor
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+
+        System.out.println("Solicitação para criar despesa enviada ao servidor. Aguarde resposta...");
+    }
+
+    private void responderConvite() throws IOException {
+        try {
+            // Solicita e valida o ID do convite
+            int idConvite;
+            while (true) {
+                System.out.print("Digite o ID do convite que deseja responder: ");
+                String input = userInput.readLine();
+                if (input.isEmpty()) {
+                    System.out.println("Erro: Você precisa digitar um ID válido.");
+                    continue;
+                }
+                try {
+                    idConvite = Integer.parseInt(input);
+                    break; // Sai do loop se o ID for válido
+                } catch (NumberFormatException e) {
+                    System.out.println("Erro: O ID do convite deve ser um número.");
+                }
+            }
+
+            // Solicita e valida a resposta do usuário
+            String resposta;
+            while (true) {
+                System.out.print("Digite sua resposta (1.aceitar/2.recusar): ");
+                String input = userInput.readLine();
+                if (input.equals("1")) {
+                    resposta = "aceitar";
+                    break;
+                } else if (input.equals("2")) {
+                    resposta = "recusar";
+                    break;
+                } else {
+                    System.out.println("Erro: Resposta inválida. Digite '1' para aceitar ou '2' para recusar.");
+                }
+            }
+
+            // Cria o objeto convite com a resposta
+            Convite conviteResposta = new Convite();
+            conviteResposta.setIdConvite(idConvite);
+            conviteResposta.setEstado(resposta);
+
+            // Prepara a comunicação com o servidor
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.RESPONDER_CONVITE);
+            novoComunicacao.setConvite(conviteResposta);
+
+            // Envia a mensagem ao servidor
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Solicitação para responder ao convite enviada ao servidor. Aguarde resposta...");
+        } catch (IOException e) {
+            System.out.println("Erro ao ler a entrada do usuário: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Erro inesperado: " + e.getMessage());
+        }
+    }
+
+    private void visualizarConvites() {
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.VISUALIZAR_CONVITES);
+
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para visualizar convites enviada ao servidor. Aguarde resposta...");
+
+    }
+
+    private void criarConvite() throws IOException {
+        System.out.println("Digite o email do utilizador que deseja convidar:");
+        String emailConvidado = userInput.readLine();
+        // Configura o convite
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.CRIAR_CONVITE);
+        novoComunicacao.setConvite(new Convite(emailConvidado));
+
+        // Envia a solicitação ao servidor
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para criar convite enviada ao servidor. Aguarde resposta...");
     }
 
     private void eliminarGrupo() throws IOException {
@@ -307,14 +504,23 @@ public class ClienteVista {
         Comunicacao novoComunicacao = new Comunicacao();
         novoComunicacao.setComando(Comandos.LOGOUT);
         comunicacaoServidor.enviarMensagem(novoComunicacao);
-        // System.out.println("Logout realizado com sucesso.");
-        comunicacao.setAutenticado(false); // Marca como não autenticado
+
+        // Atualiza o estado do cliente
+        comunicacao.setAutenticado(false);
         conectado = false;
+
+        System.out.println("Logout realizado com sucesso. Voltando ao menu de autenticação...");
     }
 
     // Atualiza a vista com mensagens recebidas do servidor
     public synchronized void atualizarVista(Comunicacao mensagem) {
         System.out.println("\n============ NOVA MENSAGEM =============");
+
+        if (mensagem.getComando() == Comandos.NOTIFICACAO) {
+            System.out.println("NOTIFICAÇÃO: " + mensagem.getResposta());
+            return;
+        }
+
         if (mensagem.getResposta() != null) {
             System.out.println("Servidor: " + mensagem.getResposta());
         }
@@ -330,7 +536,9 @@ public class ClienteVista {
         // Atualiza o estado de conexão baseado no comando recebido
         if (mensagem.getComando() == Comandos.LOGOUT) {
             System.out.println("Você foi desconectado. Retornando ao menu de autenticação...");
-            conectado = false; // Marca como desconectado
+            conectado = false;
+            comunicacao.setAutenticado(false);
+            return;
         } else if (mensagem.getComando() == Comandos.LOGIN || mensagem.getComando() == Comandos.REGISTRAR) {
             conectado = mensagem.getAutenticado();
             comunicacao.setAutenticado(mensagem.getAutenticado());
@@ -339,7 +547,6 @@ public class ClienteVista {
         System.out.println("Estado de conexão: " + conectado);
         System.out.println("========================================");
     }
-
 
 
     // Solicita o encerramento do cliente

@@ -1,13 +1,13 @@
 package Servidor.src.Handler;
 
 
+import Cliente.src.Entidades.Convite;
+import Cliente.src.Entidades.Despesa;
 import Cliente.src.Entidades.Grupo;
 import Cliente.src.Entidades.Utilizador;
 import Cliente.src.recursos.Comandos;
 import Cliente.src.recursos.Comunicacao;
-import baseDados.CRUD.GrupoCRUD;
-import baseDados.CRUD.UtilizadorCRUD;
-import baseDados.CRUD.UtilizadorGrupoCRUD;
+import baseDados.CRUD.*;
 import baseDados.Config.GestorBaseDados;
 
 import java.io.*;
@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import static Servidor.src.Servidor.TIMEOUT_SECONDS;
 import static Servidor.src.Servidor.usuariosLogados;
+import static java.lang.Math.abs;
 
 public class ClienteHandler implements Runnable {
     private final Socket clientSocket;
@@ -91,13 +92,31 @@ public class ClienteHandler implements Runnable {
                         processarSelecaoGrupo(comunicacao, outObj);
                         break;
                     case EDITAR_GRUPO:
-                         processarEdicaoGrupo(comunicacao, outObj);
+                        processarEdicaoGrupo(comunicacao, outObj);
                         break;
                     case ELIMINAR_GRUPO:
                         processarEliminacaoGrupo(comunicacao, outObj);
                         break;
                     case SAIR_GRUPO:
-                         processarSaidaGrupo(comunicacao, outObj);
+                        processarSaidaGrupo(comunicacao, outObj);
+                        break;
+                    case CRIAR_CONVITE:
+                        processarCriacaoConvite(comunicacao, outObj);
+                        break;
+                    case VISUALIZAR_CONVITES:
+                        processarVisualizacaoConvites(comunicacao, outObj);
+                        break;
+                    case RESPONDER_CONVITE:
+                        processarRespostaConvite(comunicacao, outObj);
+                        break;
+                    case INSERIR_DESPESA:
+                        processarInsercaoDespesa(comunicacao, outObj);
+                        break;
+                    case EDITAR_DESPESA:
+                        processarEdicaoDespesa(comunicacao, outObj);
+                        break;
+                    case ELIMINAR_DESPESA:
+                        processarEliminacaoDespesa(comunicacao, outObj);
                         break;
                     case SAIR:
                         handleExit(outObj);
@@ -122,6 +141,83 @@ public class ClienteHandler implements Runnable {
         }
     }
 
+    // ===========================
+    // SEÇÃO: AUTENTICAÇÃO
+    // ===========================
+    private void processarLogin(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador utilizador = comunicacao.getUtilizador();
+        System.out.println("Processando login para: " + utilizador.getEmail());
+
+        if (usuariosLogados.containsKey(utilizador.getEmail())) {
+            comunicacao.setResposta("Erro: Esta conta já está logada.");
+        } else {
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            if (utilizadorCRUD.validarCredenciais(utilizador.getEmail(), utilizador.getPassword())) {
+                // Login bem-sucedido: Atualiza o estado do servidor
+                utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail());
+                usuariosLogados.put(utilizadorAutenticado.getEmail(), outObj); // Armazena o ObjectOutputStream
+
+                comunicacao.setResposta("Login bem-sucedido!");
+                comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
+                comunicacao.setAutenticado(true); // Marca o cliente como autenticado
+                autenticado = true;
+                exibirDados();
+            } else {
+                comunicacao.setResposta("Erro: Email ou senha inválidos.");
+            }
+        }
+
+        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
+        outObj.flush();
+    }
+
+    private void processarRegistro(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador utilizador = comunicacao.getUtilizador();
+        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+
+        if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
+            comunicacao.setResposta("Erro: Este email já está registrado.");
+        } else if (utilizadorCRUD.adicionarUtilizador(utilizador)) {
+            utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail()); // Atualiza o estado
+            comunicacao.setResposta("Registro concluído com sucesso!");
+            comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
+            comunicacao.setAutenticado(true); // Marca o cliente como autenticado
+            autenticado = true;
+            usuariosLogados.put(utilizadorAutenticado.getEmail(), outObj); // Armazena o ObjectOutputStream
+            exibirDados();
+        }
+
+        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
+        outObj.flush();
+    }
+
+    private void processarEdicaoDados(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        Utilizador dadosAtualizados = comunicacao.getUtilizador();
+        System.out.println("Solicitação de edição de dados para: " + dadosAtualizados.getEmail());
+
+        if (dadosAtualizados.getEmail() == null || dadosAtualizados.getEmail().isEmpty()) {
+            comunicacao.setResposta("Erro: Email inválido.");
+        } else if (!usuariosLogados.containsKey(dadosAtualizados.getEmail())) {
+            comunicacao.setResposta("Erro: Usuário não está autenticado.");
+        } else {
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            boolean atualizado = utilizadorCRUD.atualizarDados(dadosAtualizados);
+
+            if (atualizado) {
+                comunicacao.setResposta("Dados atualizados com sucesso!");
+                utilizadorAutenticado = dadosAtualizados; // Atualiza os dados na sessão
+            } else {
+                comunicacao.setResposta("Erro ao atualizar os dados.");
+            }
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    // ===========================
+    // SEÇÃO: GRUPOS
+    // ===========================
     private void processarSaidaGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
             comunicacao.setResposta("Erro: Utilizador não autenticado.");
@@ -164,7 +260,7 @@ public class ClienteHandler implements Runnable {
         }
 
         // Remove a associação do utilizador ao grupo
-        boolean removido = utilizadorGrupoCRUD.removerAssociacao(grupoSelecionado.getIdGrupo(), utilizadorAutenticado.getId());
+        boolean removido = utilizadorGrupoCRUD.removerAssociacao(utilizadorAutenticado.getId(), grupoSelecionado.getIdGrupo());
         if (removido) {
             comunicacao.setResposta("Você saiu do grupo com sucesso.");
         } else {
@@ -174,8 +270,6 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
-
-
 
     private void processarEliminacaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
@@ -233,7 +327,6 @@ public class ClienteHandler implements Runnable {
         outObj.flush();
     }
 
-
     private void processarEdicaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
             comunicacao.setResposta("Erro: Utilizador não autenticado.");
@@ -271,7 +364,7 @@ public class ClienteHandler implements Runnable {
 //        }
 
         GrupoCRUD grupoCRUD = new GrupoCRUD(gestorBaseDados.getConexao());
-        String nomeAntigo=grupoSelecionado.getNome();
+        String nomeAntigo = grupoSelecionado.getNome();
         grupoSelecionado.setNome(novoNomeGrupo);
         // Atualiza o nome do grupo no banco de dados
         boolean atualizado = grupoCRUD.atualizarGrupo(grupoSelecionado);
@@ -287,7 +380,6 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
-
 
     private void processarSelecaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         String nomeGrupo = comunicacao.getGrupo().getNome(); // Nome do grupo enviado pelo cliente
@@ -317,7 +409,6 @@ public class ClienteHandler implements Runnable {
         outObj.flush();
     }
 
-
     private void processarListagemGrupos(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
         List<Grupo> grupos = utilizadorGrupoCRUD.listarGruposPorUtilizador(utilizadorAutenticado.getId());
@@ -340,7 +431,6 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao); // Envia a resposta para o cliente
         outObj.flush();
     }
-
 
     private void processarCriacaoGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         String nomeGrupo = comunicacao.getGrupo().getNome(); // Nome do grupo enviado pelo cliente
@@ -368,25 +458,435 @@ public class ClienteHandler implements Runnable {
         outObj.flush();
     }
 
+    // ===========================
+    // SEÇÃO: CONVITES
+    // ===========================
+    private void processarRespostaConvite(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
 
-    private void processarEdicaoDados(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
-        Utilizador dadosAtualizados = comunicacao.getUtilizador();
-        System.out.println("Solicitação de edição de dados para: " + dadosAtualizados.getEmail());
+        int idConvite = comunicacao.getConvite().getIdConvite(); // ID do convite
+        String estado = comunicacao.getConvite().getEstado(); // "aceitar" ou "recusar"
 
-        if (dadosAtualizados.getEmail() == null || dadosAtualizados.getEmail().isEmpty()) {
-            comunicacao.setResposta("Erro: Email inválido.");
-        } else if (!usuariosLogados.containsKey(dadosAtualizados.getEmail())) {
-            comunicacao.setResposta("Erro: Usuário não está autenticado.");
-        } else {
-            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
-            boolean atualizado = utilizadorCRUD.atualizarDados(dadosAtualizados);
+        // Valida o estado do convite
+        if (!estado.equalsIgnoreCase("aceitar") && !estado.equalsIgnoreCase("recusar")) {
+            comunicacao.setResposta("Erro: Estado inválido. Use 'aceitar' ou 'recusar'.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
 
-            if (atualizado) {
-                comunicacao.setResposta("Dados atualizados com sucesso!");
-                utilizadorAutenticado = dadosAtualizados; // Atualiza os dados na sessão
+        ConviteCRUD conviteCRUD = new ConviteCRUD(gestorBaseDados.getConexao());
+        Convite convite = conviteCRUD.buscarConvitePorId(idConvite);
+
+        // Verifica se o convite existe
+        if (convite == null) {
+            comunicacao.setResposta("Erro: Convite não encontrado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se o convite pertence ao utilizador autenticado
+        if (convite.getIdUtilizadorConvidado() != utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Você não tem permissão para responder a este convite.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Atualiza o estado do convite no banco de dados
+        boolean atualizado = conviteCRUD.atualizarEstadoConvite(idConvite, estado);
+
+        if (atualizado && estado.equalsIgnoreCase("aceitar")) {
+            // Verifica se o utilizador já está associado ao grupo
+            UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+            if (utilizadorGrupoCRUD.verificarMembro(convite.getIdGrupo(), utilizadorAutenticado.getId())) {
+                comunicacao.setResposta("Erro: Você já está associado a este grupo.");
             } else {
-                comunicacao.setResposta("Erro ao atualizar os dados.");
+                // Aceitação: associa o utilizador ao grupo
+                utilizadorGrupoCRUD.associarUtilizadorAGrupo(utilizadorAutenticado.getId(), convite.getIdGrupo());
+                comunicacao.setResposta("Convite aceito. Você agora faz parte do grupo: " + convite.getIdGrupo());
             }
+        } else if (atualizado) {
+            comunicacao.setResposta("Convite recusado com sucesso.");
+        } else {
+            comunicacao.setResposta("Erro ao processar sua resposta ao convite. Tente novamente.");
+        }
+
+        // Log para depuração
+        System.out.println("Resposta ao convite processada: ID=" + idConvite
+                + ", Estado=" + estado
+                + ", Utilizador=" + utilizadorAutenticado.getId());
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    private void processarVisualizacaoConvites(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        ConviteCRUD conviteCRUD = new ConviteCRUD(gestorBaseDados.getConexao());
+        List<Convite> convites = conviteCRUD.listarTodosConvitesPorUtilizador(utilizadorAutenticado.getId());
+
+        if (convites.isEmpty()) {
+            comunicacao.setResposta("Você não tem convites.");
+        } else {
+            // Inicializa os separadores para cada categoria
+            StringBuilder pendentes = new StringBuilder("Pendentes:\n");
+            StringBuilder aceitos = new StringBuilder("Aceitos:\n");
+            StringBuilder rejeitados = new StringBuilder("Rejeitados:\n");
+
+            // Classifica os convites por estado
+            for (Convite convite : convites) {
+                switch (convite.getEstado().toLowerCase()) {
+                    case "pendente":
+                        pendentes.append("ID: ").append(convite.getIdConvite())
+                                .append(", Grupo: ").append(convite.getIdGrupo())
+                                .append(", Enviado por: ").append(convite.getIdUtilizadorConvite())
+                                .append(", Data: ").append(convite.getDataEnvio())
+                                .append("\n");
+                        break;
+                    case "aceitar":
+                        aceitos.append("ID: ").append(convite.getIdConvite())
+                                .append(", Grupo: ").append(convite.getIdGrupo())
+                                .append(", Enviado por: ").append(convite.getIdUtilizadorConvite())
+                                .append(", Data: ").append(convite.getDataEnvio())
+                                .append("\n");
+                        break;
+                    case "recusar":
+                        rejeitados.append("ID: ").append(convite.getIdConvite())
+                                .append(", Grupo: ").append(convite.getIdGrupo())
+                                .append(", Enviado por: ").append(convite.getIdUtilizadorConvite())
+                                .append(", Data: ").append(convite.getDataEnvio())
+                                .append("\n");
+                        break;
+                    default:
+                        // Ignora estados inesperados
+                        break;
+                }
+            }
+
+            // Concatena todas as categorias em uma única resposta
+            StringBuilder respostaFinal = new StringBuilder("Convites categorizados:\n");
+            if (pendentes.toString().equals("Pendentes:\n")) {
+                respostaFinal.append("Nenhum convite pendente.\n");
+            } else {
+                respostaFinal.append(pendentes);
+            }
+            if (aceitos.toString().equals("Aceitos:\n")) {
+                respostaFinal.append("Nenhum convite aceito.\n");
+            } else {
+                respostaFinal.append(aceitos);
+            }
+            if (rejeitados.toString().equals("Rejeitados:\n")) {
+                respostaFinal.append("Nenhum convite rejeitado.\n");
+            } else {
+                respostaFinal.append(rejeitados);
+            }
+
+            comunicacao.setResposta(respostaFinal.toString());
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    private void processarCriacaoConvite(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para enviar convite.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        String emailConvidado = comunicacao.getConvite().getEmailConvidado();
+        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+        Utilizador convidado = utilizadorCRUD.buscarPorEmail(emailConvidado);
+
+        if (convidado == null) {
+            comunicacao.setResposta("Erro: O email fornecido não está registrado no sistema.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        ConviteCRUD conviteCRUD = new ConviteCRUD(gestorBaseDados.getConexao());
+        boolean criado = conviteCRUD.criarConvite(utilizadorAutenticado.getId(), grupoSelecionado.getIdGrupo(), convidado.getId());
+
+        if (criado) {
+            comunicacao.setResposta("Convite enviado com sucesso para: " + emailConvidado);
+
+            // Enviar notificação ao convidado se ele estiver logado
+            String mensagemNotificacao = "Você recebeu um novo convite para o grupo: " + grupoSelecionado.getNome();
+            enviarNotificacao(emailConvidado, mensagemNotificacao, Comandos.NOTIFICACAO);
+        } else {
+            comunicacao.setResposta("Erro ao enviar o convite. Tente novamente.");
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    // ===========================
+    // SEÇÃO: DESPESAS
+    // ===========================
+
+    private void processarInsercaoDespesa(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para adicionar a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        Despesa despesa = comunicacao.getDespesa();
+        if (despesa == null || despesa.getValor() <= 0) {
+            comunicacao.setResposta("Erro: Dados de despesa inválidos ou valor inválido.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+        Utilizador pagante = utilizadorCRUD.buscarPorEmail(despesa.getEmailPagante());
+        if (pagante == null) {
+            comunicacao.setResposta("Erro: O utilizador pagante não existe.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Configurar a despesa com informações do grupo e pagante
+        despesa.setIdGrupo(grupoSelecionado.getIdGrupo());
+        despesa.setIdPagador(pagante.getId());
+        despesa.setIdCriador(utilizadorAutenticado.getId());
+
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        boolean despesaInserida = despesaCRUD.criarDespesa(despesa);
+
+        if (!despesaInserida) {
+            comunicacao.setResposta("Erro ao adicionar a despesa. Tente novamente.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+        List<Integer> idsMembrosGrupo = utilizadorDespesaCRUD.listarIdsMembrosDoGrupo(grupoSelecionado.getIdGrupo());
+        idsMembrosGrupo.removeIf(id -> id == pagante.getId()); // Remover o pagante da lista
+
+        if (idsMembrosGrupo.isEmpty()) {
+            comunicacao.setResposta("Erro: Não há membros no grupo para dividir a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        double valorPorMembro = despesa.getValor() / idsMembrosGrupo.size();
+        boolean sucessoDivisao = true;
+
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        boolean atualizadoPagante = utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), despesa.getValor());
+        if (!atualizadoPagante) {
+            comunicacao.setResposta("Erro ao atualizar o saldo a receber do pagante.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        for (int idMembro : idsMembrosGrupo) {
+            Utilizador membro = utilizadorCRUD.buscarPorId(idMembro);
+            if (membro == null) {
+                sucessoDivisao = false;
+                comunicacao.setResposta("Erro: Membro não encontrado no banco de dados. ID: " + idMembro);
+                break;
+            }
+
+            boolean atualizadoDevido = utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), valorPorMembro);
+            if (!atualizadoDevido) {
+                sucessoDivisao = false;
+                comunicacao.setResposta("Erro ao atualizar o saldo devido do membro: " + membro.getNome());
+                break;
+            }
+
+            boolean detalheInserido = utilizadorDespesaCRUD.criarDetalheParticipante(
+                    despesa.getId(),
+                    idMembro,
+                    pagante.getId(),
+                    valorPorMembro,
+                    0.0
+            );
+
+            if (!detalheInserido) {
+                sucessoDivisao = false;
+                comunicacao.setResposta("Erro ao inserir o detalhe da despesa para o membro: " + membro.getNome());
+                break;
+            }
+
+            String mensagemNotificacao = String.format(
+                    "Você tem uma nova despesa no grupo '%s'. Valor a pagar: %.2f€ para %s.",
+                    grupoSelecionado.getNome(),
+                    valorPorMembro,
+                    pagante.getNome()
+            );
+            enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
+        }
+
+        if (!sucessoDivisao) {
+            // Fazer rollback em caso de falha
+            utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), -despesa.getValor());
+            idsMembrosGrupo.forEach(id -> utilizadorGrupoCRUD.incrementarValorDevido(id, grupoSelecionado.getIdGrupo(), -valorPorMembro));
+            comunicacao.setResposta("Erro ao dividir a despesa entre os membros do grupo. Operação cancelada.");
+        } else {
+            comunicacao.setResposta("Despesa adicionada com sucesso e dividida entre os membros do grupo.");
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    private void processarEdicaoDespesa(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para editar a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        Despesa despesa = comunicacao.getDespesa();
+        if (despesa == null || despesa.getValor() <= 0 || despesa.getDescricao() == null || despesa.getDescricao().isEmpty()) {
+            comunicacao.setResposta("Erro: Dados de despesa inválidos (valor ou descrição inválidos).");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        Despesa despesaOriginal = despesaCRUD.buscarDespesaPorId(despesa.getId());
+        if (despesaOriginal == null) {
+            comunicacao.setResposta("Erro: Despesa não encontrada.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se o utilizador autenticado é o criador da despesa
+        if (despesaOriginal.getIdCriador() != utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Apenas o criador da despesa pode editá-la.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Atualizar a descrição e o valor da despesa no banco de dados
+        boolean atualizado = despesaCRUD.atualizarDespesa(despesa);
+        if (!atualizado) {
+            comunicacao.setResposta("Erro ao atualizar a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+
+        // Recalcular os valores devidos e a receber para todos os membros
+        List<Integer> idsMembrosGrupo = utilizadorDespesaCRUD.listarIdsMembrosDoGrupo(despesaOriginal.getIdGrupo());
+        idsMembrosGrupo.remove((Integer) despesaOriginal.getIdPagador()); // Remove o pagador do cálculo
+
+        double novoValorPorMembro = despesa.getValor() / idsMembrosGrupo.size();
+        boolean sucessoAtualizacao = true;
+
+        for (int idMembro : idsMembrosGrupo) {
+            try {
+                // Calcula ajustes
+                double valorDevidoAnterior = utilizadorDespesaCRUD.obterValorDevidoPorMembro(despesaOriginal.getId(), idMembro);
+                double ajusteDevido = novoValorPorMembro - valorDevidoAnterior;
+
+                // Atualiza a tabela DespesaUtilizador
+                boolean atualizadoDevido = utilizadorDespesaCRUD.atualizarValorDevido(despesaOriginal.getId(), idMembro, novoValorPorMembro);
+                if (!atualizadoDevido) {
+                    sucessoAtualizacao = false;
+                    break;
+                }
+
+                // Atualiza o valor devido na tabela UtilizadorGrupo
+                boolean atualizadoGrupo = utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), ajusteDevido);
+                if (!atualizadoGrupo) {
+                    sucessoAtualizacao = false;
+                    break;
+                }
+            } catch (Exception e) {
+                sucessoAtualizacao = false;
+                break;
+            }
+        }
+
+        if (sucessoAtualizacao) {
+            // Recalcular o valor a receber para o pagador
+            double novoValorReceber = despesa.getValor();
+            double valorReceberAnterior = utilizadorDespesaCRUD.obterValorReceberPorMembro(despesaOriginal.getId(), despesaOriginal.getIdPagador());
+            double ajusteReceber = novoValorReceber - valorReceberAnterior;
+
+            utilizadorDespesaCRUD.atualizarValorAReceber(despesaOriginal.getId(), despesaOriginal.getIdPagador(), novoValorReceber);
+
+            // Atualizar o valor a receber do pagador na tabela `utilizador_grupo`
+            boolean atualizadoPagador = utilizadorGrupoCRUD.incrementarValorReceber(despesaOriginal.getIdPagador(), grupoSelecionado.getIdGrupo(), ajusteReceber);
+            if (!atualizadoPagador) {
+                sucessoAtualizacao = false;
+            }
+        }
+
+        // Enviar notificações
+        for (int idMembro : idsMembrosGrupo) {
+            Utilizador membro = new UtilizadorCRUD(gestorBaseDados.getConexao()).buscarPorId(idMembro);
+            if (membro != null && usuariosLogados.containsKey(membro.getEmail())) {
+                String mensagemNotificacao = String.format(
+                        "A despesa '%s' no grupo '%s' foi atualizada. Novo valor: %.2f€, Nova descrição: '%s'.",
+                        despesaOriginal.getDescricao(),
+                        grupoSelecionado.getNome(),
+                        despesa.getValor(),
+                        despesa.getDescricao()
+                );
+                enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
+            }
+        }
+
+        if (sucessoAtualizacao) {
+            comunicacao.setResposta("Despesa atualizada com sucesso e notificações enviadas.");
+        } else {
+            comunicacao.setResposta("Erro ao atualizar a despesa. Operação parcialmente concluída.");
         }
 
         outObj.writeObject(comunicacao);
@@ -394,51 +894,85 @@ public class ClienteHandler implements Runnable {
     }
 
 
-    private void processarLogin(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
-        Utilizador utilizador = comunicacao.getUtilizador();
-        System.out.println("Processando login para: " + utilizador.getEmail());
+    private void processarEliminacaoDespesa(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
 
-        if (usuariosLogados.containsKey(utilizador.getEmail())) {
-            comunicacao.setResposta("Erro: Esta conta já está logada.");
-        } else {
-            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
-            if (utilizadorCRUD.validarCredenciais(utilizador.getEmail(), utilizador.getPassword())) {
-                // Login bem-sucedido: Atualiza o estado do servidor
-                utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail());
-                usuariosLogados.put(utilizadorAutenticado.getEmail(), clientSocket);
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado para eliminar a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
 
-                comunicacao.setResposta("Login bem-sucedido!");
-                comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
-                comunicacao.setAutenticado(true); // Marca o cliente como autenticado
-                autenticado = true;
-                exibirDados();
-            } else {
-                comunicacao.setResposta("Erro: Email ou senha inválidos.");
+        int idDespesa = comunicacao.getDespesa().getId();
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        Despesa despesa = despesaCRUD.buscarDespesaPorId(idDespesa);
+
+        if (despesa == null) {
+            comunicacao.setResposta("Erro: Despesa não encontrada.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se o utilizador autenticado é o criador da despesa
+        if (despesa.getIdCriador() != utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Apenas o criador da despesa pode eliminá-la.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Remove a despesa do banco de dados
+        boolean eliminado = despesaCRUD.eliminarDespesa(idDespesa);
+        if (!eliminado) {
+            comunicacao.setResposta("Erro ao eliminar a despesa.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Ajustar saldos na tabela `utilizador_grupo`
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+        List<Integer> idsMembrosGrupo = utilizadorDespesaCRUD.listarIdsMembrosDoGrupo(despesa.getIdGrupo());
+
+        for (int idMembro : idsMembrosGrupo) {
+            double valorDevido = utilizadorDespesaCRUD.obterValorDevidoPorMembro(despesa.getId(), idMembro);
+            double valorReceber = utilizadorDespesaCRUD.obterValorReceberPorMembro(despesa.getId(), idMembro);
+
+            // Ajusta os saldos
+            utilizadorGrupoCRUD.incrementarValorDevido(idMembro, grupoSelecionado.getIdGrupo(), -valorDevido);
+            utilizadorGrupoCRUD.incrementarValorReceber(idMembro, grupoSelecionado.getIdGrupo(), -valorReceber);
+        }
+
+        // Notifica os membros do grupo sobre a exclusão da despesa
+        for (int idMembro : idsMembrosGrupo) {
+            Utilizador membro = new UtilizadorCRUD(gestorBaseDados.getConexao()).buscarPorId(idMembro);
+            if (membro != null && usuariosLogados.containsKey(membro.getEmail())) {
+                String mensagemNotificacao = String.format(
+                        "A despesa '%s' no grupo '%s' foi eliminada.",
+                        despesa.getDescricao(),
+                        grupoSelecionado.getNome()
+                );
+                enviarNotificacao(membro.getEmail(), mensagemNotificacao, Comandos.NOTIFICACAO);
             }
         }
 
-        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
+        comunicacao.setResposta("Despesa eliminada com sucesso e notificações enviadas.");
+        outObj.writeObject(comunicacao);
         outObj.flush();
     }
 
-    private void processarRegistro(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
-        Utilizador utilizador = comunicacao.getUtilizador();
-        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
 
-        if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
-            comunicacao.setResposta("Erro: Este email já está registrado.");
-        } else if (utilizadorCRUD.adicionarUtilizador(utilizador)) {
-            utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail()); // Atualiza o estado
-            comunicacao.setResposta("Registro concluído com sucesso!");
-            comunicacao.setUtilizador(utilizadorAutenticado); // Atualiza o objeto com o utilizador autenticado
-            comunicacao.setAutenticado(true); // Marca o cliente como autenticado
-            autenticado = true;
-            exibirDados();
-        }
-
-        outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
-        outObj.flush();
-    }
+    // ===========================
+    // SEÇÃO: FECHAMENTO DE CONEXÃO
+    // ===========================
 
     private void handleExit(ObjectOutputStream out) throws IOException {
         out.writeObject("Conexão encerrada pelo servidor. Até logo!");
@@ -465,20 +999,48 @@ public class ClienteHandler implements Runnable {
             System.err.println("Erro ao fechar socket do cliente: " + e.getMessage());
         }
     }
+
     private void processarLogout(ObjectOutputStream outObj) throws IOException {
-        // Redefine o estado de autenticação sem fechar o socket
-        System.out.println("Processando logout para o cliente.");
         if (utilizadorAutenticado != null) {
             usuariosLogados.remove(utilizadorAutenticado.getEmail());
             utilizadorAutenticado = null; // Remove as informações do utilizador autenticado
         }
         autenticado = false;
+
         comunicacao.setAutenticado(false); // Atualiza o estado no objeto comunicação
         comunicacao.setResposta("Logout realizado com sucesso. Retorne ao menu de autenticação.");
         outObj.writeObject(comunicacao); // Envia a resposta para o cliente
         outObj.flush();
+
+        System.out.println("Logout processado com sucesso para o cliente: " + clientAddress);
     }
 
+    // ===========================
+    // SEÇÃO: EXTRAS /NOTIFICAÇÕES
+    // ===========================
+
+    private void enviarNotificacao(String emailDestinatario, String mensagem, Comandos comando) {
+        if (usuariosLogados.containsKey(emailDestinatario)) {
+            try {
+                ObjectOutputStream outNotificacao = usuariosLogados.get(emailDestinatario);
+
+                // Cria a mensagem de notificação
+                Comunicacao notificacao = new Comunicacao();
+                notificacao.setComando(comando);
+                notificacao.setResposta(mensagem);
+
+                // Envia a notificação para o cliente
+                outNotificacao.writeObject(notificacao);
+                outNotificacao.flush();
+
+                System.out.println("Notificação enviada para: " + emailDestinatario);
+            } catch (IOException e) {
+                System.err.println("Erro ao enviar notificação para: " + emailDestinatario + ". Detalhes: " + e.getMessage());
+            }
+        } else {
+            System.out.println("Destinatário não está logado. Notificação não enviada. Email: " + emailDestinatario);
+        }
+    }
 
     public void exibirDados() {
         // Exibe os dados do utilizador autenticado no console do servidor
@@ -491,5 +1053,5 @@ public class ClienteHandler implements Runnable {
     }
 
 }
-///PROBLEMAS POSSIVEIS:
+/// PROBLEMAS POSSIVEIS:
 //-Logout : é suposte fazer com que ele sai do login para ficar no menu de autenticação mas esta a occorer muito erros a theard fecha enexperadamente

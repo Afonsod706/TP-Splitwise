@@ -21,50 +21,50 @@ public class DespesaService {
     }
 
     // 1. Inserir uma nova despesa no grupo
-    public boolean inserirDespesa(int idGrupo, int idCriador, String descricao, double valor, int idPagador, List<Integer> idParticipantes) {
-        if (idParticipantes == null || idParticipantes.isEmpty()) {
-            System.err.println("Erro: A lista de participantes não pode estar vazia.");
-            return false;
-        }
-        // Cria uma nova despesa
-        Despesa novaDespesa = new Despesa(0, idGrupo, idCriador, null, descricao, valor, idPagador);
-        if (despesaCRUD.criarDespesa(novaDespesa)) {
-            // Divide o valor entre os participantes e insere na tabela associativa
-            double valorPorParticipante = valor / idParticipantes.size();
-            for (int idUtilizador : idParticipantes) {
-                utilizadorDespesaCRUD.criarDetalheParticipante(novaDespesa.getId(), idUtilizador, valorPorParticipante);
-            }
-            return true;
-        }
-        return false;
-    }
+//    public boolean inserirDespesa(int idGrupo, int idCriador, String descricao, double valor, int idPagador, List<Integer> idParticipantes) {
+//        if (idParticipantes == null || idParticipantes.isEmpty()) {
+//            System.err.println("Erro: A lista de participantes não pode estar vazia.");
+//            return false;
+//        }
+//        // Cria uma nova despesa
+//        Despesa novaDespesa = new Despesa(0, idGrupo, idCriador, null, descricao, valor, idPagador);
+//        if (despesaCRUD.criarDespesa(novaDespesa)) {
+//            // Divide o valor entre os participantes e insere na tabela associativa
+//            double valorPorParticipante = valor / idParticipantes.size();
+//            for (int idUtilizador : idParticipantes) {
+//                utilizadorDespesaCRUD.criarDetalheParticipante(novaDespesa.getId(), idUtilizador, valorPorParticipante);
+//            }
+//            return true;
+//        }
+//        return false;
+//    }
 
     // 2. Editar uma despesa existente
-    public boolean editarDespesa(int idDespesa, String novaDescricao, double novoValor, List<Integer> novosParticipantes) {
-        // Atualiza a despesa
-        Despesa despesa = despesaCRUD.lerDespesaPorId(idDespesa);
-        if (despesa != null) {
-            despesa.setDescricao(novaDescricao);
-            despesa.setValor(novoValor);
-            if (despesaCRUD.atualizarDespesa(despesa)) {
-                // Atualiza os participantes e os valores devidos
-                utilizadorDespesaCRUD.deletarParticipantesDaDespesa(idDespesa);
-                double valorPorParticipante = novoValor / novosParticipantes.size();
-                for (int idUtilizador : novosParticipantes) {
-                    utilizadorDespesaCRUD.criarDetalheParticipante(idDespesa, idUtilizador, valorPorParticipante);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
+//    public boolean editarDespesa(int idDespesa, String novaDescricao, double novoValor, List<Integer> novosParticipantes) {
+//        // Atualiza a despesa
+//        Despesa despesa = despesaCRUD.lerDespesaPorId(idDespesa);
+//        if (despesa != null) {
+//            despesa.setDescricao(novaDescricao);
+//            despesa.setValor(novoValor);
+//            if (despesaCRUD.atualizarDespesa(despesa)) {
+//                // Atualiza os participantes e os valores devidos
+//                utilizadorDespesaCRUD.deletarParticipantesDaDespesa(idDespesa);
+//                double valorPorParticipante = novoValor / novosParticipantes.size();
+//                for (int idUtilizador : novosParticipantes) {
+//                    utilizadorDespesaCRUD.criarDetalheParticipante(idDespesa, idUtilizador, valorPorParticipante);
+//                }
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
 
     // 3. Eliminar uma despesa existente
-    public boolean eliminarDespesa(int idDespesa) {
-        // Remove os detalhes dos participantes antes de eliminar a despesa
-        utilizadorDespesaCRUD.deletarParticipantesDaDespesa(idDespesa);
-        return despesaCRUD.deletarDespesa(idDespesa);
-    }
+//    public boolean eliminarDespesa(int idDespesa) {
+//        // Remove os detalhes dos participantes antes de eliminar a despesa
+//        utilizadorDespesaCRUD.deletarParticipantesDaDespesa(idDespesa);
+//        return despesaCRUD.deletarDespesa(idDespesa);
+//    }
 
     // 4. Visualizar o histórico de despesas de um grupo
     public List<Despesa> visualizarHistoricoDespesas(int idGrupo) {

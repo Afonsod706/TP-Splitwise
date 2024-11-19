@@ -80,8 +80,8 @@ public class UtilizadorCRUD {
                     return new Utilizador(
                             rs.getInt("id_utilizador"),
                             rs.getString("nome"),
-                            rs.getString("email"),
                             rs.getString("telefone"),
+                            rs.getString("email"),
                             rs.getString("password")
                     );
                 }
@@ -105,6 +105,27 @@ public class UtilizadorCRUD {
             System.err.println("Erro ao atualizar os dados do utilizador: " + e.getMessage());
             return false;
         }
+    }
+
+    public Utilizador buscarPorId(int id) {
+        String sql = "SELECT * FROM Utilizador WHERE id_utilizador = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                // Cria e retorna um objeto Utilizador preenchido com os dados do banco
+                return new Utilizador(
+                        rs.getInt("id_utilizador"),   // ID do utilizador
+                        rs.getString("nome"),         // Nome
+                        rs.getString("telefone"),     // Telefone
+                        rs.getString("email"),        // Email
+                        rs.getString("password")      // Password (criptografada)
+                );
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao buscar utilizador por ID: " + e.getMessage());
+        }
+        return null; // Retorna null caso o utilizador não seja encontrado ou em caso de erro
     }
 
 }
