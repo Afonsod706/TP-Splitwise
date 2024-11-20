@@ -5,8 +5,8 @@ import Cliente.src.Entidades.Despesa;
 import Cliente.src.Entidades.Grupo;
 import Cliente.src.Entidades.Utilizador;
 import Cliente.src.Network.ClienteComunicacao;
-import Cliente.src.recursos.Comandos;
-import Cliente.src.recursos.Comunicacao;
+import Cliente.src.Controller.Comandos;
+import Cliente.src.Controller.Comunicacao;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -106,7 +106,10 @@ public class ClienteVista {
                 System.out.println("12. Criar despesa");
                 System.out.println("13. Editar despesa");
                 System.out.println("14. Eliminar despesa");
-                System.out.println("15. Logout");
+                System.out.println("15. Visualizar total de gastos do grupo");
+                System.out.println("16. Visualizar histórico de despesas do grupo");
+                System.out.println("17. Exportar despesas do grupo para CSV");
+                System.out.println("18. Logout");
                 System.out.print("Escolha uma opção: ");
                 String input = userInput.readLine();
 
@@ -127,7 +130,7 @@ public class ClienteVista {
                         selecionarGrupo();
                         break;
                     case "6":
-                        editarGrupo(); // Nova funcionalidade
+                        editarGrupo();
                         break;
                     case "7":
                         sairDoGrupo();
@@ -148,12 +151,21 @@ public class ClienteVista {
                         criarDespesa();
                         break;
                     case "13":
-                        editarDespesa(); // Tratar edição de despesa
+                        editarDespesa();
                         break;
                     case "14":
-                        eliminarDespesa(); // Tratar eliminação de despesa
+                        eliminarDespesa();
                         break;
                     case "15":
+                        visualizarTotalGastosGrupo();
+                        break;
+                    case "16":
+                        visualizarHistoricoDespesasGrupo();
+                        break;
+                    case "17":
+                        exportarDespesasGrupoCSV();
+                        break;
+                    case "18":
                         try {
                             Comunicacao novoComunicacao = new Comunicacao();
                             novoComunicacao.setComando(Comandos.SAIR);
@@ -163,13 +175,55 @@ public class ClienteVista {
                         } finally {
                             System.exit(0); // Garante que o programa será encerrado
                         }
+                        break;
                     default:
                         System.out.println("Comando inválido. Tente novamente.");
                 }
             }
         } catch (IOException e) {
-            System.err.println("Erro ao processar entrada do usuário MenuPrincipal: " + e.getMessage());
+            System.err.println("Erro ao processar entrada do usuário no Menu Principal: " + e.getMessage());
         }
+    }
+
+    private void visualizarTotalGastosGrupo() throws IOException {
+        if (comunicacao.getGrupo() == null) {
+            System.out.println("Erro: Nenhum grupo selecionado.");
+            return;
+        }
+
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.VISUALIZAR_TOTAL_GASTOS_GRUPO);
+
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para visualizar o total de gastos enviada ao servidor.");
+    }
+
+
+    private void visualizarHistoricoDespesasGrupo() throws IOException {
+        if (comunicacao.getGrupo() == null) {
+            System.out.println("Erro: Nenhum grupo selecionado.");
+            return;
+        }
+
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.VISUALIZAR_HISTORICO_DESPESAS);
+
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para visualizar o histórico de despesas enviada ao servidor.");
+    }
+
+
+    private void exportarDespesasGrupoCSV() throws IOException {
+        if (comunicacao.getGrupo() == null) {
+            System.out.println("Erro: Nenhum grupo selecionado.");
+            return;
+        }
+
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setComando(Comandos.EXPORTAR_DESPESAS_CSV);
+
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
+        System.out.println("Solicitação para exportar despesas do grupo enviada ao servidor.");
     }
 
     private void eliminarDespesa() throws IOException {
@@ -200,23 +254,23 @@ public class ClienteVista {
         System.out.println("Digite o ID da despesa que seja editar:");
         int idDespesa = 0;
         try {
-            idDespesa=Integer.parseInt(userInput.readLine());
-        }catch (NumberFormatException e) {
+            idDespesa = Integer.parseInt(userInput.readLine());
+        } catch (NumberFormatException e) {
             System.out.println("erro:ID invalido.Operação Invalida");
         }
 
         System.out.println("Digite a nova descrição da despesa:");
-        String descricaoDespesa= userInput.readLine();
+        String descricaoDespesa = userInput.readLine();
         System.out.println("Digite o novo valor do despesa:");
         double valorDespesa;
-        try{
-            valorDespesa= Double.parseDouble(userInput.readLine());
+        try {
+            valorDespesa = Double.parseDouble(userInput.readLine());
         } catch (NumberFormatException e) {
-            System.out.println("erro:Valor invalido deve ser um numero:"+e.getMessage());
+            System.out.println("erro:Valor invalido deve ser um numero:" + e.getMessage());
             return;
         }
 
-        Despesa novaDespesa=new Despesa();
+        Despesa novaDespesa = new Despesa();
         novaDespesa.setDescricao(descricaoDespesa);
         novaDespesa.setValor(valorDespesa);
         novaDespesa.setId(idDespesa);

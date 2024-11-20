@@ -1,5 +1,5 @@
 
-package Cliente.src.recursos;
+package Cliente.src.Controller;
 
 import Cliente.src.Entidades.Convite;
 import Cliente.src.Entidades.Despesa;

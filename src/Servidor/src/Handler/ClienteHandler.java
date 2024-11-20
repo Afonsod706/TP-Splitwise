@@ -5,8 +5,8 @@ import Cliente.src.Entidades.Convite;
 import Cliente.src.Entidades.Despesa;
 import Cliente.src.Entidades.Grupo;
 import Cliente.src.Entidades.Utilizador;
-import Cliente.src.recursos.Comandos;
-import Cliente.src.recursos.Comunicacao;
+import Cliente.src.Controller.Comandos;
+import Cliente.src.Controller.Comunicacao;
 import baseDados.CRUD.*;
 import baseDados.Config.GestorBaseDados;
 
@@ -119,6 +119,16 @@ public class ClienteHandler implements Runnable {
                     case ELIMINAR_DESPESA:
                         processarEliminacaoDespesa(comunicacao, outObj);
                         break;
+                    case VISUALIZAR_TOTAL_GASTOS_GRUPO:
+                        processarVisualizacaoTotalGastosGrupo(comunicacao, outObj);
+                        break;
+                    case VISUALIZAR_HISTORICO_DESPESAS:
+                        processarVisualizacaoHistoricoDespesas(comunicacao, outObj);
+                        break;
+                    case EXPORTAR_DESPESAS_CSV:
+                        processarExportacaoDespesasCSV(comunicacao, outObj);
+                        break;
+
                     case SAIR:
                         handleExit(outObj);
                         return; // Encerra o loop
@@ -141,6 +151,7 @@ public class ClienteHandler implements Runnable {
             }
         }
     }
+
 
     // ===========================
     // SEÇÃO: AUTENTICAÇÃO
@@ -477,6 +488,29 @@ public class ClienteHandler implements Runnable {
             }
         }
 
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    private void processarVisualizacaoTotalGastosGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        double totalGastos = despesaCRUD.somarTotalGastosPorGrupo(grupoSelecionado.getIdGrupo());
+
+        comunicacao.setResposta(String.format("O total de gastos do grupo '%s' é: %.2f€", grupoSelecionado.getNome(), totalGastos));
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -985,6 +1019,141 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
+    private void processarVisualizacaoHistoricoDespesas(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        List<Despesa> historicoDespesas = despesaCRUD.listarDespesasPorGrupo(grupoSelecionado.getIdGrupo());
+
+        if (historicoDespesas.isEmpty()) {
+            comunicacao.setResposta("Nenhuma despesa encontrada para o grupo selecionado.");
+        } else {
+            StringBuilder resposta = new StringBuilder("Histórico de despesas do grupo:\n");
+            for (Despesa despesa : historicoDespesas) {
+                resposta.append(String.format(
+                        "Descrição: %s | Valor: %.2f€ | Data: %s | Criador: %s\n",
+                        despesa.getDescricao(),
+                        despesa.getValor(),
+                        despesa.getData(),
+                        despesa.getIdCriador() // Supondo que o nome do criador esteja no objeto Despesa
+                ));
+            }
+            comunicacao.setResposta(resposta.toString());
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+    private void processarExportacaoDespesasCSV(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        List<Despesa> despesas = despesaCRUD.listarDespesasPorGrupo(grupoSelecionado.getIdGrupo());
+
+        if (despesas.isEmpty()) {
+            comunicacao.setResposta("Nenhuma despesa encontrada para exportação.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+        List<String> membrosGrupo = utilizadorGrupoCRUD.listarNomesMembrosPorGrupo(grupoSelecionado.getIdGrupo());
+        double totalGastos = despesaCRUD.somarTotalGastosPorGrupo(grupoSelecionado.getIdGrupo());
+
+        // Diretório do arquivo
+        String diretorio = "src/Cliente/src/recursos";
+        File caminhoDiretorio = new File(diretorio);
+
+        if (!caminhoDiretorio.exists()) {
+            caminhoDiretorio.mkdirs(); // Garante que o diretório existe
+        }
+
+        // Caminho completo do arquivo
+        String filePath = diretorio + "/despesas_grupo_" + grupoSelecionado.getIdGrupo() + ".csv";
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            // Cabeçalho do grupo
+            writer.write("Grupo: " + grupoSelecionado.getNome() + "\n");
+            writer.write("Membros do Grupo: " + String.join(", ", membrosGrupo) + "\n");
+            writer.write("Gasto Total do Grupo: " + String.format("%.2f", totalGastos) + "€\n\n");
+
+            // Cabeçalho das colunas
+            writer.write("ID,Descrição,Valor (€),Data,Pagador,Criador\n");
+
+            // Reutilizar o CRUD para obter informações do utilizador
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+
+            // Escrever cada despesa
+            for (Despesa despesa : despesas) {
+                // Obter o nome do pagador
+                String pagadorNome = "Desconhecido";
+                Utilizador pagador = utilizadorCRUD.buscarPorId(despesa.getIdPagador());
+                if (pagador != null) {
+                    pagadorNome = pagador.getNome();
+                }
+
+                // Obter o nome do criador
+                String criadorNome = "Desconhecido";
+                Utilizador criador = utilizadorCRUD.buscarPorId(despesa.getIdCriador());
+                if (criador != null) {
+                    criadorNome = criador.getNome();
+                }
+
+                // Escrever no arquivo
+                writer.write(String.format(
+                        "%d,\"%s\",%.2f,%s,%s,%s\n",
+                        despesa.getId(),
+                        despesa.getDescricao().replace("\"", "\"\""), // Escapar aspas duplas
+                        despesa.getValor(),
+                        despesa.getData(),
+                        pagadorNome,
+                        criadorNome
+                ));
+            }
+        } catch (IOException e) {
+            System.out.println("Erro: " + e.getMessage());
+            comunicacao.setResposta("Erro ao exportar despesas para CSV.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        } catch (Exception e) {
+            comunicacao.setResposta("Erro inesperado ao processar exportação: " + e.getMessage());
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        comunicacao.setResposta("Despesas exportadas com sucesso para o arquivo: " + filePath);
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
 
     // ===========================
     // SEÇÃO: FECHAMENTO DE CONEXÃO

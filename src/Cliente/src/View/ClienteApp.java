@@ -1,6 +1,6 @@
 //package Cliente.src.View;
 //
-//import Cliente.src.recursos.Comunicacao;
+//import Cliente.src.Controller.Comunicacao;
 ////import Cliente.src.recursos.RespostaHandler;
 //
 //import java.io.BufferedReader;

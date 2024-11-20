@@ -1,8 +1,8 @@
 package Cliente.src.Network;
 
 import Cliente.src.View.ClienteVista;
-import Cliente.src.recursos.Comandos;
-import Cliente.src.recursos.Comunicacao;
+import Cliente.src.Controller.Comandos;
+import Cliente.src.Controller.Comunicacao;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

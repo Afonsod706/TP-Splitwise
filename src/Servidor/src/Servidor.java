@@ -70,7 +70,7 @@ public class Servidor {
         }
     }
 
-    // Método para gerenciar a comunicação com o servidor de backup
+    // Metodo para gerenciar a comunicação com o servidor de backup
     private static void iniciarBackupHandler() {
         try (ServerSocket backupServerSocket = new ServerSocket(BACKUP_PORT)) {
             System.out.println("Servidor de backup aguardando conexões na porta " + BACKUP_PORT);

@@ -281,4 +281,27 @@ public class UtilizadorGrupoCRUD {
         }
     }
 
+    public List<String> listarNomesMembrosPorGrupo(int idGrupo) {
+        List<String> nomesMembros = new ArrayList<>();
+        String sql = """
+        SELECT u.nome
+        FROM Utilizador u
+        INNER JOIN utilizador_grupo ug ON u.id_utilizador = ug.id_utilizador
+        WHERE ug.id_grupo = ?
+    """;
+
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo); // Define o ID do grupo
+            ResultSet rs = pstmt.executeQuery();
+
+            while (rs.next()) {
+                nomesMembros.add(rs.getString("nome")); // Adiciona o nome do membro à lista
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao listar nomes dos membros por grupo: " + e.getMessage());
+        }
+
+        return nomesMembros; // Retorna a lista de nomes
+    }
+
 }

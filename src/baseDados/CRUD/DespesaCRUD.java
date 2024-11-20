@@ -128,4 +128,18 @@ public class DespesaCRUD {
     }
 
 
+    public double somarTotalGastosPorGrupo(int idGrupo) {
+        String sql = "SELECT SUM(valor) AS total_gastos FROM Despesa WHERE id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("total_gastos"); // Retorna a soma total de gastos do grupo
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao calcular o total de gastos por grupo: " + e.getMessage());
+        }
+        return 0.0; // Retorna 0.0 caso ocorra algum erro ou o grupo não tenha despesas
+    }
+
 }

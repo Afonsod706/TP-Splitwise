@@ -26,6 +26,7 @@ public class Cliente {
                 serverAddress = "localhost"; // Valor padrão
             }
 
+
             System.out.print("Digite a porta do servidor (default: 5001): ");
             String portInput = scanner.nextLine().trim();
             serverPort = portInput.isEmpty() ? 5001 : Integer.parseInt(portInput);
