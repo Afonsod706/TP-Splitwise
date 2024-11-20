@@ -1,10 +1,7 @@
 
 package Cliente.src.Controller;
 
-import Cliente.src.Entidades.Convite;
-import Cliente.src.Entidades.Despesa;
-import Cliente.src.Entidades.Grupo;
-import Cliente.src.Entidades.Utilizador;
+import Cliente.src.Entidades.*;
 
 import java.io.Serializable;
 import java.util.List;
@@ -21,6 +18,7 @@ public class Comunicacao implements Serializable {
     private Grupo grupo;
     private Convite convite;
     private Despesa despesa;
+    private Pagamento pagamento;
 
     // Construtores
     public Comunicacao(String pedido, Utilizador utilizador) {
@@ -97,6 +95,14 @@ public class Comunicacao implements Serializable {
 
     public void setDespesa(Despesa despesa) {
         this.despesa = despesa;
+    }
+
+    public Pagamento getPagamento() {
+        return pagamento;
+    }
+
+    public void setPagamento(Pagamento pagamento) {
+        this.pagamento = pagamento;
     }
 
 //    public void adicionarGrupo(Grupo grupo) {

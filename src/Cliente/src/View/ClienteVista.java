@@ -1,9 +1,6 @@
 package Cliente.src.View;
 
-import Cliente.src.Entidades.Convite;
-import Cliente.src.Entidades.Despesa;
-import Cliente.src.Entidades.Grupo;
-import Cliente.src.Entidades.Utilizador;
+import Cliente.src.Entidades.*;
 import Cliente.src.Network.ClienteComunicacao;
 import Cliente.src.Controller.Comandos;
 import Cliente.src.Controller.Comunicacao;
@@ -88,6 +85,7 @@ public class ClienteVista {
     }
 
     // Exibe o menu principal após autenticação
+    // Exibe o menu principal após autenticação
     private void exibirMenuPrincipal() {
         try {
             while (conectado) {
@@ -109,7 +107,11 @@ public class ClienteVista {
                 System.out.println("15. Visualizar total de gastos do grupo");
                 System.out.println("16. Visualizar histórico de despesas do grupo");
                 System.out.println("17. Exportar despesas do grupo para CSV");
-                System.out.println("18. Logout");
+                System.out.println("18. Visualizar saldos do grupo");
+                System.out.println("19. Inserir pagamento");
+                System.out.println("20. Visualizar pagamentos");
+                System.out.println("21. Eliminar pagamento");
+                System.out.println("22. Logout");
                 System.out.print("Escolha uma opção: ");
                 String input = userInput.readLine();
 
@@ -166,6 +168,18 @@ public class ClienteVista {
                         exportarDespesasGrupoCSV();
                         break;
                     case "18":
+                        visualizarSaldosGrupo();
+                        break;
+                    case "19":
+                        inserirPagamento();
+                        break;
+                    case "20":
+                        visualizarPagamentos();
+                        break;
+                    case "21":
+                        eliminarPagamento();
+                        break;
+                    case "22":
                         try {
                             Comunicacao novoComunicacao = new Comunicacao();
                             novoComunicacao.setComando(Comandos.SAIR);
@@ -185,12 +199,88 @@ public class ClienteVista {
         }
     }
 
-    private void visualizarTotalGastosGrupo() throws IOException {
-        if (comunicacao.getGrupo() == null) {
-            System.out.println("Erro: Nenhum grupo selecionado.");
-            return;
+    private void visualizarPagamentos() {
+        try {
+            System.out.println("\n--- Visualizar Pagamentos ---");
+
+            // Solicitação de listagem de pagamentos ao servidor
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.LISTAR_PAGAMENTOS);
+
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Solicitação de listagem de pagamentos enviada. Aguarde resposta...");
+        } catch (Exception e) {
+            System.err.println("Erro ao visualizar pagamentos: " + e.getMessage());
+        }
+    }
+
+    private void eliminarPagamento() {
+        try {
+            System.out.println("\n--- Eliminar Pagamento ---");
+
+            System.out.print("Digite o ID do pagamento a ser eliminado: ");
+            int idPagamento = Integer.parseInt(userInput.readLine());
+
+            // Solicitação de eliminação de pagamento ao servidor
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.ELIMINAR_PAGAMENTO);
+
+            // Preenche os dados do pagamento
+            Pagamento pagamento = new Pagamento();
+            pagamento.setIdPagamento(idPagamento);
+            novoComunicacao.setPagamento(pagamento);
+
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Solicitação de eliminação de pagamento enviada. Aguarde resposta...");
+        } catch (Exception e) {
+            System.err.println("Erro ao eliminar pagamento: " + e.getMessage());
+        }
+    }
+
+
+    private void inserirPagamento() {
+        try {
+            System.out.println("\n--- Inserir Pagamento ---");
+
+            System.out.print("Digite o email do recebedor: ");
+            String emailRecebedor = userInput.readLine();
+
+            System.out.print("Digite o ID da despesa: ");
+            int idDespesa = Integer.parseInt(userInput.readLine());
+
+            System.out.print("Digite o valor do pagamento: ");
+            double valor = Double.parseDouble(userInput.readLine());
+
+            // Criar e enviar o pagamento ao servidor
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.INSERIR_PAGAMENTO);
+            novoComunicacao.setPagamento(new Pagamento(emailRecebedor,idDespesa,valor));
+
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Solicitação de pagamento enviada. Aguarde resposta...");
+        } catch (Exception e) {
+            System.err.println("Erro ao inserir pagamento: " + e.getMessage());
+        }
+    }
+
+
+    private void visualizarSaldosGrupo() {
+
+        // Enviar solicitação ao servidor
+        try {
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.VISUALIZAR_SALDOS_GRUPO);
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Solicitação para visualizar Saldo enviada ao servidor. Aguarde resposta...");
+        } catch (Exception e) {
+            System.err.println("Erro ao visualizar Saldo grupo: " + e.getMessage());
         }
 
+
+    }
+
+
+    private void visualizarTotalGastosGrupo() throws IOException {
         Comunicacao novoComunicacao = new Comunicacao();
         novoComunicacao.setComando(Comandos.VISUALIZAR_TOTAL_GASTOS_GRUPO);
 
@@ -512,9 +602,10 @@ public class ClienteVista {
         System.out.println("Digite sua senha:");
         String senha = userInput.readLine();
         Utilizador utilizador = new Utilizador(email, senha);
-        comunicacao.setUtilizador(utilizador);
-        comunicacao.setComando(Comandos.LOGIN);
-        comunicacaoServidor.enviarMensagem(comunicacao);
+        Comunicacao novoComunicacao = new Comunicacao();
+        novoComunicacao.setUtilizador(utilizador);
+        novoComunicacao.setComando(Comandos.LOGIN);
+        comunicacaoServidor.enviarMensagem(novoComunicacao);
     }
 
     private void exibirInformacoesUtilizador() {

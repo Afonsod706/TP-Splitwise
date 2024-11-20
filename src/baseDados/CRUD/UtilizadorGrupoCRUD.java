@@ -199,6 +199,7 @@ public class UtilizadorGrupoCRUD {
     //*********
     //Manipulação de valores Devido e receber
     //*********
+// Obter o valor total devido de um membro em um grupo
     public double obterValorDevido(int idUtilizador, int idGrupo) {
         String sql = "SELECT valor_devido FROM utilizador_grupo WHERE id_utilizador = ? AND id_grupo = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
@@ -214,6 +215,7 @@ public class UtilizadorGrupoCRUD {
         return 0.0;
     }
 
+    // Obter o valor total a receber de um membro em um grupo
     public double obterValorReceber(int idUtilizador, int idGrupo) {
         String sql = "SELECT valor_a_receber FROM utilizador_grupo WHERE id_utilizador = ? AND id_grupo = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
@@ -222,6 +224,20 @@ public class UtilizadorGrupoCRUD {
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 return rs.getDouble("valor_a_receber");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0;
+    }
+    public double obterValorGastoTotal(int idUtilizador, int idGrupo) {
+        String sql = "SELECT gasto_total FROM utilizador_grupo WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idUtilizador);
+            pstmt.setInt(2, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("gasto_total");
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -281,6 +297,19 @@ public class UtilizadorGrupoCRUD {
         }
     }
 
+    public boolean incrementarGastoTotal(int idUtilizador, int idGrupo, double incremento) {
+        String sql = "UPDATE utilizador_grupo SET gasto_total = gasto_total + ? WHERE id_utilizador = ? AND id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, incremento);
+            pstmt.setInt(2, idUtilizador);
+            pstmt.setInt(3, idGrupo);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public List<String> listarNomesMembrosPorGrupo(int idGrupo) {
         List<String> nomesMembros = new ArrayList<>();
         String sql = """
@@ -302,6 +331,22 @@ public class UtilizadorGrupoCRUD {
         }
 
         return nomesMembros; // Retorna a lista de nomes
+    }
+
+    // Lista todos os IDs dos membros de um grupo específico
+    public List<Integer> listarIdsMembrosDoGrupo(int idGrupo) {
+        List<Integer> idsMembros = new ArrayList<>();
+        String sql = "SELECT id_utilizador FROM utilizador_grupo WHERE id_grupo = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo); // Define o ID do grupo
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                idsMembros.add(rs.getInt("id_utilizador")); // Adiciona o ID do membro à lista
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao listar IDs dos membros por grupo: " + e.getMessage());
+        }
+        return idsMembros; // Retorna a lista de IDs
     }
 
 }

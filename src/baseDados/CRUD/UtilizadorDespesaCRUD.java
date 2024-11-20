@@ -63,20 +63,8 @@ public class UtilizadorDespesaCRUD {
         }
     }
 
-    // Remove a associação entre um utilizador e uma despesa
-    public boolean deletarDetalheParticipante(int idDespesa, int idUtilizador) {
-        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, idDespesa);
-            pstmt.setInt(2, idUtilizador);
-            return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
 
-    // Remove todos os participantes associados a uma despesa específica
+   //  Remove todos os participantes associados a uma despesa específica
     public void deletarParticipantesDaDespesa(int idDespesa) {
         String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
@@ -157,4 +145,61 @@ public class UtilizadorDespesaCRUD {
 
         return 0.0; // Retorna 0.0 caso nenhum valor seja encontrado ou ocorra um erro
     }
+
+    // Método para calcular o gasto total de um membro em um grupo
+    public double calcularGastoTotalPorMembro(int idMembro, int idGrupo) {
+        String sql = """
+        SELECT SUM(d.valor) AS gasto_total
+        FROM Despesa d
+        INNER JOIN DespesaUtilizador du ON d.id_despesa = du.id_despesa
+        WHERE du.id_utilizador = ? AND d.id_grupo = ?
+    """;
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idMembro);
+            pstmt.setInt(2, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("gasto_total");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0; // Retorna 0.0 caso nenhum valor seja encontrado ou ocorra um erro
+    }
+
+    // Método para obter o valor devido entre dois membros
+    public double obterValorDevidoEntreMembros(int idDevedor, int idCredor, int idGrupo) {
+        String sql = """
+        SELECT SUM(du.valor_devido) AS valor_devido
+        FROM DespesaUtilizador du
+        INNER JOIN Despesa d ON du.id_despesa = d.id_despesa
+        WHERE du.id_utilizador = ? AND du.id_remetente = ? AND d.id_grupo = ?
+    """;
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDevedor);
+            pstmt.setInt(2, idCredor);
+            pstmt.setInt(3, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble("valor_devido");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0.0; // Retorna 0.0 caso nenhum valor seja encontrado ou ocorra um erro
+    }
+
+    // Remove o participante associado a uma despesa específica
+    public boolean deletarDetalheParticipante(int idDespesa, int idUtilizador) {
+        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDespesa);
+            pstmt.setInt(2, idUtilizador);
+            return pstmt.executeUpdate() > 0; // Retorna true se a remoção foi bem-sucedida
+        } catch (SQLException e) {
+            System.err.println("Erro ao deletar participante da despesa: " + e.getMessage());
+            return false;
+        }
+    }
+
 }

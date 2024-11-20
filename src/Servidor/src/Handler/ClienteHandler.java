@@ -1,10 +1,7 @@
 package Servidor.src.Handler;
 
 
-import Cliente.src.Entidades.Convite;
-import Cliente.src.Entidades.Despesa;
-import Cliente.src.Entidades.Grupo;
-import Cliente.src.Entidades.Utilizador;
+import Cliente.src.Entidades.*;
 import Cliente.src.Controller.Comandos;
 import Cliente.src.Controller.Comunicacao;
 import baseDados.CRUD.*;
@@ -98,6 +95,8 @@ public class ClienteHandler implements Runnable {
                     case ELIMINAR_GRUPO:
                         processarEliminacaoGrupo(comunicacao, outObj);
                         break;
+                    case VISUALIZAR_SALDOS_GRUPO:
+                        processarVisualizacaoSaldosGrupo(comunicacao, outObj);
                     case SAIR_GRUPO:
                         processarSaidaGrupo(comunicacao, outObj);
                         break;
@@ -128,7 +127,15 @@ public class ClienteHandler implements Runnable {
                     case EXPORTAR_DESPESAS_CSV:
                         processarExportacaoDespesasCSV(comunicacao, outObj);
                         break;
-
+                    case INSERIR_PAGAMENTO:
+                        processarInsercaoPagamento(comunicacao, outObj);
+                        break;
+                    case LISTAR_PAGAMENTOS:
+                        processarListagemPagamentos(comunicacao, outObj);
+                        break;
+                    case ELIMINAR_PAGAMENTO:
+                        processarEliminacaoPagamento(comunicacao, outObj);
+                        break;
                     case SAIR:
                         handleExit(outObj);
                         return; // Encerra o loop
@@ -515,9 +522,106 @@ public class ClienteHandler implements Runnable {
         outObj.flush();
     }
 
+    private void processarVisualizacaoSaldosGrupo(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        try {
+            UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+            UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+
+            // Lista de membros do grupo
+            List<Integer> idsMembros = utilizadorGrupoCRUD.listarIdsMembrosDoGrupo(grupoSelecionado.getIdGrupo());
+            if (idsMembros.isEmpty()) {
+                comunicacao.setResposta("Erro: Não há membros no grupo.");
+                outObj.writeObject(comunicacao);
+                outObj.flush();
+                return;
+            }
+
+            StringBuilder resposta = new StringBuilder();
+            resposta.append("Saldos do grupo '").append(grupoSelecionado.getNome()).append("':\n");
+            resposta.append("-------------------------------------\n");
+
+            for (int idMembro : idsMembros) {
+                Utilizador membro = utilizadorCRUD.buscarPorId(idMembro);
+                if (membro == null) {
+                    resposta.append("Erro: Membro com ID ").append(idMembro).append(" não encontrado.\n");
+                    continue;
+                }
+
+                // Calcula o gasto total (valor efetivamente pago pelo membro)
+                double gastoTotal = utilizadorGrupoCRUD.obterValorGastoTotal(idMembro, grupoSelecionado.getIdGrupo());
+
+                // Obtém os valores devido e a receber
+                double valorDevido = utilizadorGrupoCRUD.obterValorDevido(idMembro, grupoSelecionado.getIdGrupo());
+                double valorReceber = utilizadorGrupoCRUD.obterValorReceber(idMembro, grupoSelecionado.getIdGrupo());
+
+                // Adiciona informações sobre o membro
+                resposta.append("Membro: ").append(membro.getNome()).append("\n");
+                resposta.append(String.format("Gasto Total: %.2f€\n", gastoTotal));
+                resposta.append(String.format("Valor Total Devido: %.2f€\n", valorDevido));
+                resposta.append(String.format("Valor Total a Receber: %.2f€\n", valorReceber));
+
+                // Calcula as dívidas para outros membros
+                resposta.append("Dívidas para outros membros:\n");
+                for (int outroMembroId : idsMembros) {
+                    if (idMembro == outroMembroId) continue; // Ignora o próprio membro
+
+                    double valorDevidoOutro = utilizadorDespesaCRUD.obterValorDevidoEntreMembros(
+                            idMembro, outroMembroId, grupoSelecionado.getIdGrupo()
+                    );
+
+                    if (valorDevidoOutro > 0) {
+                        Utilizador outroMembro = utilizadorCRUD.buscarPorId(outroMembroId);
+                        resposta.append(String.format(" - Deve %.2f€ a %s\n", valorDevidoOutro, outroMembro.getNome()));
+                    }
+                }
+
+                // Calcula os créditos recebidos de outros membros
+                resposta.append("Créditos recebidos de outros membros:\n");
+                for (int outroMembroId : idsMembros) {
+                    if (idMembro == outroMembroId) continue; // Ignora o próprio membro
+
+                    double valorReceberOutro = utilizadorDespesaCRUD.obterValorDevidoEntreMembros(
+                            outroMembroId, idMembro, grupoSelecionado.getIdGrupo()
+                    );
+
+                    if (valorReceberOutro > 0) {
+                        Utilizador outroMembro = utilizadorCRUD.buscarPorId(outroMembroId);
+                        resposta.append(String.format(" - Receber %.2f€ de %s\n", valorReceberOutro, outroMembro.getNome()));
+                    }
+                }
+
+                resposta.append("-------------------------------------\n");
+            }
+
+            comunicacao.setResposta(resposta.toString());
+        } catch (Exception e) {
+            comunicacao.setResposta("Erro inesperado ao processar saldos: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
     // ===========================
-    // SEÇÃO: CONVITES
-    // ===========================
+// SEÇÃO: CONVITES
+// ===========================
     private void processarRespostaConvite(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
             comunicacao.setResposta("Erro: Utilizador não autenticado.");
@@ -701,9 +805,9 @@ public class ClienteHandler implements Runnable {
         outObj.flush();
     }
 
-    // ===========================
-    // SEÇÃO: DESPESAS
-    // ===========================
+// ===========================
+// SEÇÃO: DESPESAS
+// ===========================
 
     private void processarInsercaoDespesa(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
@@ -1019,6 +1123,7 @@ public class ClienteHandler implements Runnable {
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
+
     private void processarVisualizacaoHistoricoDespesas(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         if (utilizadorAutenticado == null) {
             comunicacao.setResposta("Erro: Utilizador não autenticado.");
@@ -1156,8 +1261,206 @@ public class ClienteHandler implements Runnable {
 
 
     // ===========================
-    // SEÇÃO: FECHAMENTO DE CONEXÃO
-    // ===========================
+// SEÇÃO: PAGAMENTO
+// ===========================
+    private void processarInsercaoPagamento(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        Pagamento pagamento = comunicacao.getPagamento();
+        if (pagamento == null || pagamento.getValor() <= 0 || pagamento.getIdDespesa() <= 0) {
+            comunicacao.setResposta("Erro: Dados de pagamento inválidos.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        try {
+            UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
+            UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+            UtilizadorDespesaCRUD utilizadorDespesaCRUD = new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+            PagamentoCRUD pagamentoCRUD = new PagamentoCRUD(gestorBaseDados.getConexao());
+
+            // Busca o ID do recebedor pelo email
+            Integer idRecebedor = utilizadorCRUD.buscarPorEmail(pagamento.getEmailRecebedor()).getId();
+            if (idRecebedor == null) {
+                comunicacao.setResposta("Erro: O email do recebedor não corresponde a nenhum utilizador.");
+                outObj.writeObject(comunicacao);
+                outObj.flush();
+                return;
+            }
+
+            // Verifica o valor devido para a despesa
+            double valorDevido = utilizadorDespesaCRUD.obterValorDevidoPorMembro(pagamento.getIdDespesa(), utilizadorAutenticado.getId());
+            if (pagamento.getValor() > valorDevido) {
+                comunicacao.setResposta("Erro: O valor do pagamento excede o valor devido. Valor devido: " + valorDevido + "€.");
+                outObj.writeObject(comunicacao);
+                outObj.flush();
+                return;
+            }
+
+            // Registra o pagamento na tabela Pagamento
+            boolean inserido = pagamentoCRUD.criarPagamento(
+                    grupoSelecionado.getIdGrupo(),
+                    utilizadorAutenticado.getId(),
+                    idRecebedor,
+                    pagamento.getIdDespesa(),
+                    pagamento.getValor()
+            );
+
+            if (inserido) {
+                // Atualiza os valores nas tabelas UtilizadorGrupo e DespesaUtilizador
+                boolean debitoPagadorAtualizado = utilizadorGrupoCRUD.incrementarValorDevido(
+                        utilizadorAutenticado.getId(),
+                        grupoSelecionado.getIdGrupo(),
+                        -pagamento.getValor() // Decrementa a dívida do pagador
+                );
+
+                boolean creditoRecebedorAtualizado = utilizadorGrupoCRUD.incrementarValorReceber(
+                        idRecebedor,
+                        grupoSelecionado.getIdGrupo(),
+                        -pagamento.getValor() // Decrementa o crédito do recebedor
+                );
+
+                boolean gastoPagadorAtualizado = utilizadorGrupoCRUD.incrementarGastoTotal(
+                        utilizadorAutenticado.getId(),
+                        grupoSelecionado.getIdGrupo(),
+                        pagamento.getValor() // Incrementa o gasto total do pagador
+                );
+
+                // Atualiza ou remove a dívida
+                boolean dividaAtualizada = false;
+                if (pagamento.getValor() < valorDevido) {
+                    dividaAtualizada = utilizadorDespesaCRUD.atualizarValorDevido(
+                            pagamento.getIdDespesa(),
+                            utilizadorAutenticado.getId(),
+                            valorDevido - pagamento.getValor() // Atualiza a dívida com o restante
+                    );
+                } else {
+                    dividaAtualizada = utilizadorDespesaCRUD.deletarDetalheParticipante(pagamento.getIdDespesa(), utilizadorAutenticado.getId());
+                }
+
+                // Verifica se todas as operações foram bem-sucedidas
+                if (debitoPagadorAtualizado && creditoRecebedorAtualizado && gastoPagadorAtualizado && dividaAtualizada) {
+                    comunicacao.setResposta("Pagamento registrado com sucesso. Saldos e dívidas ajustados.");
+                } else {
+                    comunicacao.setResposta("Pagamento registrado, mas houve um erro ao ajustar saldos e dívidas.");
+                }
+            } else {
+                comunicacao.setResposta("Erro ao registrar o pagamento.");
+            }
+        } catch (Exception e) {
+            comunicacao.setResposta("Erro inesperado ao processar pagamento: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+    private void processarListagemPagamentos(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        PagamentoCRUD pagamentoCRUD = new PagamentoCRUD(gestorBaseDados.getConexao());
+        List<Pagamento> pagamentos = pagamentoCRUD.listarPagamentosPorGrupo(grupoSelecionado.getIdGrupo());
+
+        if (pagamentos.isEmpty()) {
+            comunicacao.setResposta("Nenhum pagamento encontrado para o grupo selecionado.");
+        } else {
+            StringBuilder resposta = new StringBuilder("Pagamentos realizados no grupo:\n");
+            for (Pagamento pagamento : pagamentos) {
+                resposta.append(String.format(
+                        "ID: %d | Pagador: %d | Recebedor: %d | Valor: %.2f€ | Data: %s\n",
+                        pagamento.getIdPagamento(),
+                        pagamento.getIdPagador(),
+                        pagamento.getIdRecebedor(),
+                        pagamento.getValor(),
+                        pagamento.getData()
+                ));
+            }
+            comunicacao.setResposta(resposta.toString());
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+    private void processarEliminacaoPagamento(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Erro: Nenhum grupo está selecionado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        int idPagamento = comunicacao.getPagamento().getIdPagamento();
+        PagamentoCRUD pagamentoCRUD = new PagamentoCRUD(gestorBaseDados.getConexao());
+        Pagamento pagamento = pagamentoCRUD.buscarPagamentoPorId(idPagamento);
+
+        if (pagamento == null) {
+            comunicacao.setResposta("Erro: Pagamento não encontrado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verificar se o utilizador é o pagador ou recebedor
+        if (pagamento.getIdPagador() != utilizadorAutenticado.getId() && pagamento.getIdRecebedor() != utilizadorAutenticado.getId()) {
+            comunicacao.setResposta("Erro: Você não tem permissão para eliminar este pagamento.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Eliminar pagamento do banco de dados
+        boolean eliminado = pagamentoCRUD.removerPagamento(idPagamento);
+        if (eliminado) {
+            UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
+            UtilizadorDespesaCRUD utilizadorDespesaCRUD=new UtilizadorDespesaCRUD(gestorBaseDados.getConexao());
+            // Reverter os saldos do pagador e do recebedor
+            utilizadorGrupoCRUD.incrementarValorDevido(pagamento.getIdPagador(), grupoSelecionado.getIdGrupo(), pagamento.getValor());
+            utilizadorGrupoCRUD.incrementarGastoTotal(pagamento.getIdPagador(), grupoSelecionado.getIdGrupo(), -pagamento.getValor());
+            utilizadorGrupoCRUD.incrementarValorReceber(pagamento.getIdRecebedor(), grupoSelecionado.getIdGrupo(), pagamento.getValor());
+            utilizadorDespesaCRUD.criarDetalheParticipante(pagamento.getIdDespesa(),pagamento.getIdPagador(),pagamento.getIdRecebedor(),pagamento.getValor());
+            comunicacao.setResposta("Pagamento eliminado com sucesso.");
+        } else {
+            comunicacao.setResposta("Erro ao eliminar o pagamento.");
+        }
+
+        outObj.writeObject(comunicacao);
+        outObj.flush();
+    }
+
+// ===========================
+// SEÇÃO: FECHAMENTO DE CONEXÃO
+// ===========================
 
     private void handleExit(ObjectOutputStream out) throws IOException {
         out.writeObject("Conexão encerrada pelo servidor. Até logo!");
@@ -1200,9 +1503,9 @@ public class ClienteHandler implements Runnable {
         System.out.println("Logout processado com sucesso para o cliente: " + clientAddress);
     }
 
-    // ===========================
-    // SEÇÃO: EXTRAS /NOTIFICAÇÕES
-    // ===========================
+// ===========================
+// SEÇÃO: EXTRAS /NOTIFICAÇÕES
+// ===========================
 
     private void enviarNotificacao(String emailDestinatario, String mensagem, Comandos comando) {
         if (usuariosLogados.containsKey(emailDestinatario)) {
