@@ -1,31 +1,42 @@
 package Cliente.src;
 
-import java.io.BufferedReader;
+import Cliente.src.Network.ClienteComunicacao;
+import Cliente.src.View.ClienteVista;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
 import java.util.Scanner;
 
 public class Cliente {
-    private static final String SERVER_ADDRESS = "localhost"; // Endereço do servidor
-    private static final int PORT = 5001; // Porta do servidor
+    public static void main(String[] args) throws IOException, InterruptedException {
+        String serverAddress;
+        int serverPort;
 
-    public static void main(String[] args) {
-        try (Socket socket = new Socket(SERVER_ADDRESS, PORT);
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-             BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in))) {
+        // Permitir configuração dinâmica do servidor e porta
+        if (args.length >= 2) {
+            // Configurar servidor e porta a partir dos argumentos da linha de comando
+            serverAddress = args[0];
+            serverPort = Integer.parseInt(args[1]);
+        } else {
+            // Solicitar ao usuário o endereço do servidor e a porta
+            Scanner scanner = new Scanner(System.in);
 
-            String userInput;
-
-            while ((userInput = stdIn.readLine()) != null) {
-                System.out.println("\ndigite aqui: ");
-                out.println(userInput); // Envia a entrada do utilizador para o servidor
-                System.out.println("Resposta do servidor: " + in.readLine()); // Lê a resposta do servidor
+            System.out.print("Digite o endereço do servidor (default: localhost): ");
+            serverAddress = scanner.nextLine().trim();
+            if (serverAddress.isEmpty()) {
+                serverAddress = "localhost"; // Valor padrão
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+
+
+            System.out.print("Digite a porta do servidor (default: 5001): ");
+            String portInput = scanner.nextLine().trim();
+            serverPort = portInput.isEmpty() ? 5001 : Integer.parseInt(portInput);
         }
+
+        // Inicializar a comunicação com o servidor
+        ClienteComunicacao comunicacao = new ClienteComunicacao(serverAddress, serverPort);
+        ClienteVista vista = new ClienteVista(comunicacao);
+
+        // Iniciar a interface do cliente
+        vista.iniciar();
     }
 }
