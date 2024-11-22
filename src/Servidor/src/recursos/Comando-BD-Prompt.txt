@@ -1,0 +1,74 @@
+
+1. Abrindo o SQLite
+Iniciar o shell do SQLite:
+sqlite3 nome_do_banco_de_dados.db
+
+2. Gerenciamento de Tabelas
+Criar uma tabela:
+CREATE TABLE nome_da_tabela (
+    coluna1 tipo NOT NULL,
+    coluna2 tipo,
+    ...
+);
+Listar todas as tabelas:
+.tables
+Ver a estrutura de uma tabela:
+PRAGMA table_info(nome_da_tabela);
+Renomear uma tabela:
+ALTER TABLE nome_antigo RENAME TO novo_nome;
+Excluir uma tabela:
+DROP TABLE nome_da_tabela;
+
+3. Manipulação de Dados
+Inserir dados:
+INSERT INTO nome_da_tabela (coluna1, coluna2) VALUES (valor1, valor2);
+Selecionar dados:
+SELECT * FROM nome_da_tabela;
+Selecionar dados com condições:
+SELECT * FROM nome_da_tabela WHERE coluna1 = valor;
+Atualizar dados:
+UPDATE nome_da_tabela SET coluna1 = novo_valor WHERE coluna2 = valor;
+Excluir dados:
+DELETE FROM nome_da_tabela WHERE coluna1 = valor;
+
+4. Consultas e Filtros
+Selecionar dados com ordenação:
+SELECT * FROM nome_da_tabela ORDER BY coluna1 ASC|DESC;
+Limitar resultados:
+SELECT * FROM nome_da_tabela LIMIT n;
+Contar registros:
+SELECT COUNT(*) FROM nome_da_tabela;
+Uso de agrupamento:
+SELECT coluna1, COUNT(*) FROM nome_da_tabela GROUP BY coluna1;
+
+5. Gerenciamento de Índices
+Criar um índice:
+CREATE INDEX nome_do_indice ON nome_da_tabela(coluna);
+Excluir um índice:
+DROP INDEX nome_do_indice;
+
+6. Transações
+Iniciar uma transação:
+BEGIN TRANSACTION;
+Comitar uma transação:
+COMMIT;
+Reverter uma transação:
+ROLLBACK;
+
+7. Verificação de Estrutura e Dados
+Listar todas as colunas de uma tabela:
+PRAGMA table_info(nome_da_tabela);
+Visualizar comandos SQL gerados para a tabela:
+SELECT sql FROM sqlite_master WHERE type='table' AND name='nome_da_tabela';
+
+8. Saída do SQLite
+Sair do shell do SQLite:
+.exit
+
+9. Outros Comandos Úteis
+Ativar ou desativar a visualização de resultados em formato de tabela:
+.mode column
+Definir a largura das colunas na saída:
+.width 10 20 30  -- onde os números são as larguras das colunas
+Mostrar ajuda para outros comandos:
+.help

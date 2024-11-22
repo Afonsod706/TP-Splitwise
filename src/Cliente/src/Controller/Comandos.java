@@ -1,0 +1,18 @@
+package Cliente.src.Controller;
+
+public enum Comandos {
+    REGISTRAR, LOGIN, SAIR, CRIAR_GRUPO, SELECIONAR_GRUPO,
+    LISTAR_GRUPOS, SAIR_GRUPO, CRIAR_CONVITE,EDITAR_GRUPO ,ELIMINAR_GRUPO, LISTAR_CONVITES,
+    ACEITAR_CONVITE, RECUSAR_CONVITE, INSERIR_DESPESA, TOTAL_GASTOS_GRUPO,
+    HISTORICO_DESPESAS, EXPORTAR_DESPESAS, EDITAR_DESPESA, ELIMINAR_DESPESA,
+    INSERIR_PAGAMENTO, LISTAR_PAGAMENTOS, ELIMINAR_PAGAMENTO,
+    VISUALIZAR_SALDOS_GRUPO, INFORMACOES, EDITAR_DADOS, LOGOUT, VISUALIZAR_CONVITES, RESPONDER_CONVITE, NOTIFICACAO, VISUALIZAR_TOTAL_GASTOS_GRUPO, VISUALIZAR_HISTORICO_DESPESAS, EXPORTAR_DESPESAS_CSV;
+
+    public static Comandos fromString(String comando) {
+        try {
+            return Comandos.valueOf(comando.toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return null; // Retorna null para comandos inválidos
+        }
+    }
+}
