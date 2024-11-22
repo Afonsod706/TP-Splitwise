@@ -15,18 +15,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 
-import static Servidor.src.Servidor.TIMEOUT_SECONDS;
-import static Servidor.src.Servidor.usuariosLogados;
+import static Servidor.src.Servidor.*;
 import static java.lang.Math.abs;
 
 public class ClienteHandler implements Runnable {
     private final Socket clientSocket;
     private final GestorBaseDados gestorBaseDados;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private boolean authenticated = false;
+    private ScheduledFuture<?> timeoutFuture; // Armazena o futuro do timeout
     private boolean timeout = false;
     String clientAddress;
     private Comunicacao comunicacao;
@@ -40,27 +40,15 @@ public class ClienteHandler implements Runnable {
         this.gestorBaseDados = gestorBaseDados;
         clientAddress = clientSocket.getInetAddress().getHostAddress();
         this.grupos = new ArrayList<>();
+        comunicacao = new Comunicacao();
     }
 
     @Override
     public void run() {
         try (ObjectInputStream inObj = new ObjectInputStream(clientSocket.getInputStream());
              ObjectOutputStream outObj = new ObjectOutputStream(clientSocket.getOutputStream())) {
-            // Timeout se não autenticar em 60 segundos
-            scheduler.schedule(() -> {
-                if (!autenticado) {
-                    timeout = true;
-                    try {
-                        System.out.println("Cliente não autenticado desconectado por timeout: " + clientAddress);
-                        comunicacao.setResposta("Autenticação não realizada no tempo limite. Conexão encerrada.");
-                        outObj.writeObject(comunicacao);
-                        clientSocket.close();
-                    } catch (IOException e) {
-                        System.err.println("Erro ao encerrar conexão por timeout: " + e.getMessage());
-                    }
-                }
-            }, TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
+            // Inicia o monitoramento de timeout
+            iniciarTimeout(outObj);
             while ((comunicacao = (Comunicacao) inObj.readObject()) != null) {
                 Comandos comando = comunicacao.getComando();
                 System.out.println("Comando: " + comando);
@@ -141,7 +129,9 @@ public class ClienteHandler implements Runnable {
                         return; // Encerra o loop
                     case LOGOUT:
                         // Limpa os dados do cliente autenticado
-                        handleExit(outObj);
+                       // handleExit(outObj);
+                        processarLogout(outObj);
+                        reiniciarTimeout(outObj);
                         return; // Encerra o loop
                     default:
                         comunicacao.setResposta("Comando inválido.");
@@ -156,8 +146,10 @@ public class ClienteHandler implements Runnable {
             if (utilizadorAutenticado != null) {
                 logoutUser(clientAddress);
             }
+            encerrarTimeout();
         }
     }
+
 
 
     // ===========================
@@ -218,7 +210,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Erro: Não foi possível concluir o registro. Tente novamente.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
         outObj.flush();
     }
@@ -251,7 +243,7 @@ public class ClienteHandler implements Runnable {
                 comunicacao.setResposta("Erro ao atualizar os dados. Tente novamente.");
             }
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -307,7 +299,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Erro ao tentar sair do grupo. Tente novamente.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -363,7 +355,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Erro ao tentar eliminar o grupo. Tente novamente.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -416,7 +408,7 @@ public class ClienteHandler implements Runnable {
             grupoSelecionado.setNome(nomeAntigo);
             comunicacao.setResposta("Erro ao atualizar o grupo. Tente novamente.");
         }
-
+        enviarAlteracaoBanco();
         // Envia a resposta de volta ao cliente
         outObj.writeObject(comunicacao);
         outObj.flush();
@@ -494,7 +486,7 @@ public class ClienteHandler implements Runnable {
                 comunicacao.setResposta("Erro ao criar o grupo.");
             }
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -683,7 +675,7 @@ public class ClienteHandler implements Runnable {
         System.out.println("Resposta ao convite processada: ID=" + idConvite
                 + ", Estado=" + estado
                 + ", Utilizador=" + utilizadorAutenticado.getId());
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -800,6 +792,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Erro ao enviar o convite. Tente novamente.");
         }
+        enviarAlteracaoBanco();
 
         outObj.writeObject(comunicacao);
         outObj.flush();
@@ -931,7 +924,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Despesa adicionada com sucesso e dividida entre os membros do grupo.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1034,7 +1027,7 @@ public class ClienteHandler implements Runnable {
         } else {
             comunicacao.setResposta("Erro ao atualizar a despesa. Operação revertida.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1120,6 +1113,7 @@ public class ClienteHandler implements Runnable {
         }
 
         comunicacao.setResposta("Despesa eliminada com sucesso e notificações enviadas.");
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1353,6 +1347,13 @@ public class ClienteHandler implements Runnable {
                 // Verifica se todas as operações foram bem-sucedidas
                 if (debitoPagadorAtualizado && creditoRecebedorAtualizado && gastoPagadorAtualizado && dividaAtualizada) {
                     comunicacao.setResposta("Pagamento registrado com sucesso. Saldos e dívidas ajustados.");
+                    String mensagemPagamentoEliminadoRecebedor = String.format(
+                            "O pagamento de %.2f€ enviado pelo utilizador '%s' foi eliminado do grupo '%s'.",
+                            pagamento.getValor(),
+                            utilizadorAutenticado.getNome(),
+                            grupoSelecionado.getNome()
+                    );
+                    enviarNotificacao(pagamento.getEmailRecebedor(), mensagemPagamentoEliminadoRecebedor, Comandos.NOTIFICACAO);
                 } else {
                     comunicacao.setResposta("Pagamento registrado, mas houve um erro ao ajustar saldos e dívidas.");
                 }
@@ -1363,7 +1364,7 @@ public class ClienteHandler implements Runnable {
             comunicacao.setResposta("Erro inesperado ao processar pagamento: " + e.getMessage());
             e.printStackTrace();
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1450,10 +1451,24 @@ public class ClienteHandler implements Runnable {
             utilizadorGrupoCRUD.incrementarValorReceber(pagamento.getIdRecebedor(), grupoSelecionado.getIdGrupo(), pagamento.getValor());
             utilizadorDespesaCRUD.criarDetalheParticipante(pagamento.getIdDespesa(),pagamento.getIdPagador(),pagamento.getIdRecebedor(),pagamento.getValor());
             comunicacao.setResposta("Pagamento eliminado com sucesso.");
+            // Criar mensagem
+            UtilizadorCRUD utilizadorCRUD=new UtilizadorCRUD(gestorBaseDados.getConexao());
+            String mensagemPagamentoEliminado = String.format(
+                    "O pagamento de %.2f€ entre '%s' e '%s' foi eliminado no grupo '%s' por '%s'.",
+                    pagamento.getValor(),
+                    utilizadorCRUD.buscarPorId(pagamento.getIdPagador()).getNome(),
+                    utilizadorCRUD.buscarPorId(pagamento.getIdRecebedor()).getNome(),
+                    grupoSelecionado.getNome(),
+                    utilizadorAutenticado.getNome()
+            );
+            // Enviar notificações para ambos os usuários
+            enviarNotificacao(utilizadorCRUD.buscarPorId(pagamento.getIdPagador()).getEmail(), mensagemPagamentoEliminado, Comandos.NOTIFICACAO);
+            enviarNotificacao(utilizadorCRUD.buscarPorId(pagamento.getIdRecebedor()).getEmail(), mensagemPagamentoEliminado, Comandos.NOTIFICACAO);
+
         } else {
             comunicacao.setResposta("Erro ao eliminar o pagamento.");
         }
-
+        enviarAlteracaoBanco();
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1538,6 +1553,40 @@ public class ClienteHandler implements Runnable {
         System.out.println("Email: " + utilizadorAutenticado.getEmail());
         System.out.println("Telefone: " + utilizadorAutenticado.getTelefone());
         System.out.println("autenticação " + comunicacao.getAutenticado());
+    }
+    private void iniciarTimeout(ObjectOutputStream outObj) {
+        timeoutFuture = scheduler.schedule(() -> {
+            if (!autenticado) {
+                timeout = true;
+                try {
+                    System.out.println("Cliente não autenticado desconectado por timeout: " + clientAddress);
+                    comunicacao = new Comunicacao();
+                    comunicacao.setResposta("Autenticação não realizada no tempo limite. Conexão encerrada.");
+                    outObj.writeObject(comunicacao);
+                    outObj.flush();
+                    clientSocket.close();
+                } catch (IOException e) {
+                    System.err.println("Erro ao encerrar conexão por timeout: " + e.getMessage());
+                }
+            }
+        }, TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Reinicia o monitoramento de timeout.
+     */
+    private void reiniciarTimeout(ObjectOutputStream outObj) {
+        encerrarTimeout(); // Cancela o timeout atual, se existir
+        iniciarTimeout(outObj); // Inicia um novo timeout
+    }
+
+    /**
+     * Cancela o timeout.
+     */
+    private void encerrarTimeout() {
+        if (timeoutFuture != null && !timeoutFuture.isDone()) {
+            timeoutFuture.cancel(true);
+        }
     }
 
 }
