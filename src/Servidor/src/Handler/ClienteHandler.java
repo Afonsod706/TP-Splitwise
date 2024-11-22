@@ -132,7 +132,7 @@ public class ClienteHandler implements Runnable {
                        // handleExit(outObj);
                         processarLogout(outObj);
                         reiniciarTimeout(outObj);
-                        return; // Encerra o loop
+                        break; // Encerra o loop
                     default:
                         comunicacao.setResposta("Comando inválido.");
                         outObj.writeObject(comunicacao);
@@ -1590,5 +1590,3 @@ public class ClienteHandler implements Runnable {
     }
 
 }
-/// PROBLEMAS POSSIVEIS:
-//-Logout : é suposte fazer com que ele sai do login para ficar no menu de autenticação mas esta a occorer muito erros a theard fecha enexperadamente
