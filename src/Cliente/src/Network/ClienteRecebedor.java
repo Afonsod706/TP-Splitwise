@@ -40,11 +40,8 @@ public class ClienteRecebedor implements Runnable {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }catch (IOException e) {
-            // Verifica se o socket ainda está aberto antes de ler
-            if (socket.isClosed() || socket.isInputShutdown()) {
-                System.err.println("Conexão encerrada pelo servidor ou cliente.");
-            }
-            System.err.println("Conexão perdida com o servidor.");
+
+            System.err.println("Conexão perdida com o servidor.:"+ e);
         }  finally {
             System.out.println("Encerrando thread de recepção.");
             vista.finalizarCliente(); // Solicita que o cliente seja finalizado

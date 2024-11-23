@@ -1,6 +1,7 @@
 package baseDados.CRUD;
 
 import Cliente.src.Entidades.Grupo;
+import Cliente.src.Entidades.UtilizadorGrupo;
 import baseDados.Config.GestorBaseDados;
 
 import java.sql.*;
@@ -360,5 +361,33 @@ public class UtilizadorGrupoCRUD {
         }
         return idsMembros; // Retorna a lista de IDs
     }
+    public List<UtilizadorGrupo> listarUtilizadoresPorGrupo(int idGrupo) {
+        List<UtilizadorGrupo> lista = new ArrayList<>();
+        String sql = """
+        SELECT id_utilizador, id_grupo, gasto_total, valor_devido, valor_a_receber
+        FROM utilizador_grupo
+        WHERE id_grupo = ?
+    """;
+
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idGrupo);
+            ResultSet rs = pstmt.executeQuery();
+
+            while (rs.next()) {
+                UtilizadorGrupo ug = new UtilizadorGrupo(
+                        rs.getInt("id_utilizador"),
+                        rs.getInt("id_grupo"),
+                        rs.getDouble("gasto_total"),
+                        rs.getDouble("valor_devido"),
+                        rs.getDouble("valor_a_receber")
+                );
+                lista.add(ug);
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao listar utilizadores por grupo: " + e.getMessage());
+        }
+        return lista;
+    }
+
 
 }

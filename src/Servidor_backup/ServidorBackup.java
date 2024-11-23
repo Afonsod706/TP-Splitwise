@@ -16,9 +16,6 @@ public class ServidorBackup {
 private static final int TIMEOUT=30000;
 private static long ultimoHeartbeat = System.currentTimeMillis();
     private static boolean sincronizado = false; // Variável de controle para sincronização inicial
-    private static StringBuilder fragmentBuffer = new StringBuilder(); // Armazena os fragmentos recebidos
-    private static int totalFragmentosEsperados = 0; // Total de fragmentos esperados
-    private static int fragmentosRecebidos = 0; // Contador de fragmentos recebidos
 
     public static void main(String[] args) {
         System.out.println("Iniciando Servidor de Backup...");

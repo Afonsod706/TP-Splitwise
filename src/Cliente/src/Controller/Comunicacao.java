@@ -14,12 +14,13 @@ public class Comunicacao implements Serializable {
     private Utilizador utilizador; // Objeto Utilizador contendo informações do cliente
     private boolean autenticado = false;
     private Comandos comando;
-    private List<Grupo> grupos;
     private Grupo grupo;
     private Convite convite;
     private Despesa despesa;
     private Pagamento pagamento;
-
+/// Parte para interface grafica
+    private List<Grupo> grupos;
+    private List<UtilizadorGrupo> utilizadorGrupos;
     // Construtores
     public Comunicacao(String pedido, Utilizador utilizador) {
         this.pedido = pedido;
@@ -103,6 +104,22 @@ public class Comunicacao implements Serializable {
 
     public void setPagamento(Pagamento pagamento) {
         this.pagamento = pagamento;
+    }
+
+    public List<Grupo> getGrupos() {
+        return grupos;
+    }
+
+    public void setGrupos(List<Grupo> grupos) {
+        this.grupos = grupos;
+    }
+
+    public List<UtilizadorGrupo> getUtilizadorGrupos() {
+        return utilizadorGrupos;
+    }
+
+    public void setUtilizadorGrupos(List<UtilizadorGrupo> utilizadorGrupos) {
+        this.utilizadorGrupos = utilizadorGrupos;
     }
 
 //    public void adicionarGrupo(Grupo grupo) {

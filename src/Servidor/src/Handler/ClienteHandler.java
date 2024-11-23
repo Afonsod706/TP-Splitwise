@@ -1590,3 +1590,5 @@ public class ClienteHandler implements Runnable {
     }
 
 }
+/// PROBLEMAS POSSIVEIS:
+//-Logout : é suposte fazer com que ele sai do login para ficar no menu de autenticação mas esta a occorer muito erros a theard fecha enexperadamente

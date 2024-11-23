@@ -90,106 +90,37 @@ public class ClienteVista {
         try {
             while (conectado) {
                 System.out.println("\n--- Menu Principal ---");
-                System.out.println("1. Editar dados do cliente");
-                System.out.println("2. Exibir informações do utilizador");
-                System.out.println("3. Criar grupo");
-                System.out.println("4. Listar grupos");
-                System.out.println("5. Selecionar grupo");
-                System.out.println("6. Editar Nome grupo");
-                System.out.println("7. Sair do grupo");
-                System.out.println("8. Eliminar grupo");
-                System.out.println("9. Criar convite");
-                System.out.println("10. Visualizar convites");
-                System.out.println("11. Responder a convite");
-                System.out.println("12. Criar despesa");
-                System.out.println("13. Editar despesa");
-                System.out.println("14. Eliminar despesa");
-                System.out.println("15. Visualizar total de gastos do grupo");
-                System.out.println("16. Visualizar histórico de despesas do grupo");
-                System.out.println("17. Exportar despesas do grupo para CSV");
-                System.out.println("18. Visualizar saldos do grupo");
-                System.out.println("19. Inserir pagamento");
-                System.out.println("20. Visualizar pagamentos");
-                System.out.println("21. Eliminar pagamento");
-                System.out.println("22. Logout");
+                System.out.println("1. Gerenciar Despesas");
+                System.out.println("2. Gerenciar Pagamentos");
+                System.out.println("3. Gerenciar Convites");
+                System.out.println("4. Gerenciar Grupos");
+                System.out.println("5. Exibir informações do utilizador");
+                System.out.println("6. Editar dados do cliente");
+                System.out.println("7. Logout");
                 System.out.print("Escolha uma opção: ");
                 String input = userInput.readLine();
 
                 switch (input) {
                     case "1":
-                        editarDadosCliente(userInput);
+                        exibirMenuDespesas();
                         break;
                     case "2":
-                        exibirInformacoesUtilizador();
+                        exibirMenuPagamentos();
                         break;
                     case "3":
-                        criarGrupo();
+                        exibirMenuConvites();
                         break;
                     case "4":
-                        listarGrupos();
+                        exibirMenuGrupos();
                         break;
                     case "5":
-                        selecionarGrupo();
+                        exibirInformacoesUtilizador();
                         break;
                     case "6":
-                        editarGrupo();
+                        editarDadosCliente(userInput);
                         break;
                     case "7":
-                        sairDoGrupo();
-                        break;
-                    case "8":
-                        eliminarGrupo();
-                        break;
-                    case "9":
-                        criarConvite();
-                        break;
-                    case "10":
-                        visualizarConvites();
-                        break;
-                    case "11":
-                        responderConvite();
-                        break;
-                    case "12":
-                        criarDespesa();
-                        break;
-                    case "13":
-                        editarDespesa();
-                        break;
-                    case "14":
-                        eliminarDespesa();
-                        break;
-                    case "15":
-                        visualizarTotalGastosGrupo();
-                        break;
-                    case "16":
-                        visualizarHistoricoDespesasGrupo();
-                        break;
-                    case "17":
-                        exportarDespesasGrupoCSV();
-                        break;
-                    case "18":
-                        visualizarSaldosGrupo();
-                        break;
-                    case "19":
-                        inserirPagamento();
-                        break;
-                    case "20":
-                        visualizarPagamentos();
-                        break;
-                    case "21":
-                        eliminarPagamento();
-                        break;
-                    case "22":
                         realizarLogout();
-                      /*  try {
-                            Comunicacao novoComunicacao = new Comunicacao();
-                            novoComunicacao.setComando(Comandos.SAIR);
-                            comunicacaoServidor.enviarMensagem(novoComunicacao);
-                            System.out.println("Encerrando o cliente...");
-                            comunicacaoServidor.encerrar();
-                        } finally {
-                            System.exit(0); // Garante que o programa será encerrado
-                        }*/
                         break;
                     default:
                         System.out.println("Comando inválido. Tente novamente.");
@@ -197,6 +128,162 @@ public class ClienteVista {
             }
         } catch (IOException e) {
             System.err.println("Erro ao processar entrada do usuário no Menu Principal: " + e.getMessage());
+        }
+    }
+
+    // Submenu para Gerenciar Despesas
+    private void exibirMenuDespesas() {
+        try {
+            while (true) {
+                System.out.println("\n--- Menu Despesas ---");
+                System.out.println("1. Criar Despesa");
+                System.out.println("2. Editar Despesa");
+                System.out.println("3. Eliminar Despesa");
+                System.out.println("4. Visualizar Total de Gastos");
+                System.out.println("5. Visualizar Histórico de Despesas");
+                System.out.println("6. Exportar Despesas para CSV");
+                System.out.println("7. Voltar ao Menu Principal");
+                System.out.print("Escolha uma opção: ");
+                String input = userInput.readLine();
+
+                switch (input) {
+                    case "1":
+                        criarDespesa();
+                        break;
+                    case "2":
+                        editarDespesa();
+                        break;
+                    case "3":
+                        eliminarDespesa();
+                        break;
+                    case "4":
+                        visualizarTotalGastosGrupo();
+                        break;
+                    case "5":
+                        visualizarHistoricoDespesasGrupo();
+                        break;
+                    case "6":
+                        exportarDespesasGrupoCSV();
+                        break;
+                    case "7":
+                        return; // Retorna ao menu principal
+                    default:
+                        System.out.println("Comando inválido. Tente novamente.");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro no Menu Despesas: " + e.getMessage());
+        }
+    }
+
+    // Submenu para Gerenciar Pagamentos
+    private void exibirMenuPagamentos() {
+        try {
+            while (true) {
+                System.out.println("\n--- Menu Pagamentos ---");
+                System.out.println("1. Inserir Pagamento");
+                System.out.println("2. Visualizar Pagamentos");
+                System.out.println("3. Eliminar Pagamento");
+                System.out.println("4. Voltar ao Menu Principal");
+                System.out.print("Escolha uma opção: ");
+                String input = userInput.readLine();
+
+                switch (input) {
+                    case "1":
+                        inserirPagamento();
+                        break;
+                    case "2":
+                        visualizarPagamentos();
+                        break;
+                    case "3":
+                        eliminarPagamento();
+                        break;
+                    case "4":
+                        return; // Retorna ao menu principal
+                    default:
+                        System.out.println("Comando inválido. Tente novamente.");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro no Menu Pagamentos: " + e.getMessage());
+        }
+    }
+
+    // Submenu para Gerenciar Convites
+    private void exibirMenuConvites() {
+        try {
+            while (true) {
+                System.out.println("\n--- Menu Convites ---");
+                System.out.println("1. Criar Convite");
+                System.out.println("2. Visualizar Convites");
+                System.out.println("3. Responder Convite");
+                System.out.println("4. Voltar ao Menu Principal");
+                System.out.print("Escolha uma opção: ");
+                String input = userInput.readLine();
+
+                switch (input) {
+                    case "1":
+                        criarConvite();
+                        break;
+                    case "2":
+                        visualizarConvites();
+                        break;
+                    case "3":
+                        responderConvite();
+                        break;
+                    case "4":
+                        return; // Retorna ao menu principal
+                    default:
+                        System.out.println("Comando inválido. Tente novamente.");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro no Menu Convites: " + e.getMessage());
+        }
+    }
+
+    // Submenu para Gerenciar Grupos
+    private void exibirMenuGrupos() {
+        try {
+            while (true) {
+                System.out.println("\n--- Menu Grupos ---");
+                System.out.println("1. Criar Grupo");
+                System.out.println("2. Listar Grupos");
+                System.out.println("3. Selecionar Grupo");
+                System.out.println("4. Editar Nome do Grupo");
+                System.out.println("5. Sair do Grupo");
+                System.out.println("6. Eliminar Grupo");
+                System.out.println("7. Voltar ao Menu Principal");
+                System.out.print("Escolha uma opção: ");
+                String input = userInput.readLine();
+
+                switch (input) {
+                    case "1":
+                        criarGrupo();
+                        break;
+                    case "2":
+                        listarGrupos();
+                        break;
+                    case "3":
+                        selecionarGrupo();
+                        break;
+                    case "4":
+                        editarGrupo();
+                        break;
+                    case "5":
+                        sairDoGrupo();
+                        break;
+                    case "6":
+                        eliminarGrupo();
+                        break;
+                    case "7":
+                        return; // Retorna ao menu principal
+                    default:
+                        System.out.println("Comando inválido. Tente novamente.");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Erro no Menu Grupos: " + e.getMessage());
         }
     }
 

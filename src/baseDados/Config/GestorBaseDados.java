@@ -17,10 +17,10 @@ public class GestorBaseDados {
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
-            //limparDadosTeste();
+            limparDadosTeste();
            // ApagarTabelas();
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
-            //inserirUsuariosGrupoDespesa();
+            inserirUsuariosGrupoDespesa();
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
         }

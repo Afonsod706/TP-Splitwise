@@ -10,7 +10,7 @@ public class Grupo implements Serializable {
     private String nome;
     private int idCriador;
     private List<Utilizador> membros; // Lista de membros do grupo
-
+    private Double GastoTotal;
     // Construtor
     public Grupo(int idGrupo, String nome, int idCriador) {
         this.idGrupo = idGrupo;
@@ -98,5 +98,13 @@ public class Grupo implements Serializable {
     @Override
     public int hashCode() {
         return Objects.hash(idGrupo);
+    }
+
+    public Double getGastoTotal() {
+        return GastoTotal;
+    }
+
+    public void setGastoTotal(Double gastoTotal) {
+        GastoTotal = gastoTotal;
     }
 }
