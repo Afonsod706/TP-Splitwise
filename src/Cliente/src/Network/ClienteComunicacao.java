@@ -41,7 +41,7 @@ public class ClienteComunicacao {
 
     // Inicia a thread de recepção de mensagens
     public void iniciarRecebimento(ClienteVista vista) {
-        ClienteRecebedor recebedor = new ClienteRecebedor(inObj, vista, running);
+        ClienteRecebedor recebedor = new ClienteRecebedor(inObj, vista, running,socket);
         receiverThread = new Thread(recebedor);
         receiverThread.start();
     }
@@ -79,6 +79,11 @@ public class ClienteComunicacao {
             System.err.println("Erro ao enviar objeto: " + e.getMessage());
         }
     }
+
+    public ObjectInputStream getInObj() {
+        return inObj;
+    }
+
     // Encerra a conexão com o servidor
     public void encerrar() {
         running.set(false);

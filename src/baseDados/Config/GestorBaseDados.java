@@ -1,8 +1,9 @@
 package baseDados.Config;
 
 import java.sql.*;
-
+import java.util.Locale;
 public class GestorBaseDados {
+    public static StringBuilder queryLog = new StringBuilder();
     private Connection conn;
 
     // Construtor que inicializa a conexão com a base de dados
@@ -16,11 +17,10 @@ public class GestorBaseDados {
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
-             limparDadosTeste();
-            //ApagarTabelas();
-            //adicionarColunaPagamento();
+            //limparDadosTeste();
+           // ApagarTabelas();
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
-            inserirUsuariosGrupoDespesa();
+            //inserirUsuariosGrupoDespesa();
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
         }
@@ -163,15 +163,21 @@ public class GestorBaseDados {
     }
 
     // Método para atualizar a versão do banco de dados
-    public void incrementarVersao() {
-        try (Statement stmt = conn.createStatement()) {
-            int novaVersao = getVersaoAtual() + 1;
+    // Incrementa a versão do banco de dados (static)
+    public static synchronized void incrementarVersao() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados3.db");
+             Statement stmt = conn.createStatement()) {
+
+            // Incrementa a versão com base na versão atual
+            ResultSet rs = stmt.executeQuery("SELECT version FROM Version");
+            int novaVersao = rs.next() ? rs.getInt("version") + 1 : 1; // Inicia com 1 caso não exista versão
             stmt.executeUpdate("UPDATE Version SET version = " + novaVersao);
             System.out.println("Versão do banco de dados atualizada para " + novaVersao);
         } catch (SQLException e) {
-            System.out.println("Erro ao incrementar a versão: " + e.getMessage());
+            System.err.println("Erro ao incrementar a versão: " + e.getMessage());
         }
     }
+
 
     // Método para obter a versão atual do banco de dados
     public int getVersaoAtual() {
@@ -251,6 +257,7 @@ public class GestorBaseDados {
             stmt.execute("DELETE FROM Convite;");
             stmt.execute("DELETE FROM DespesaUtilizador;");
             stmt.execute("DELETE FROM Pagamento;");
+            stmt.execute("DELETE FROM Version;");
 
             // Reiniciar IDs autoincrementados
             stmt.execute("DELETE FROM sqlite_sequence WHERE name='utilizador_grupo';");
@@ -260,6 +267,7 @@ public class GestorBaseDados {
             stmt.execute("DELETE FROM sqlite_sequence WHERE name='Convite';");
             stmt.execute("DELETE FROM sqlite_sequence WHERE name='DespesaUtilizador';");
             stmt.execute("DELETE FROM sqlite_sequence WHERE name='Pagamento';");
+            stmt.execute("DELETE FROM sqlite_sequence WHERE name='Version';");
 
             System.out.println("Dados de teste removidos e IDs reiniciados com sucesso.");
 
@@ -288,25 +296,7 @@ public class GestorBaseDados {
         }
     }
 
-    // Método para adicionar a coluna id_despesa na tabela Pagamento
-    public void adicionarColunaPagamento() {
-        if (conn == null) {
-            System.out.println("Conexão não estabelecida. Não foi possível alterar a tabela Pagamento.");
-            return;
-        }
 
-        String sqlAlterTable = """
-                    ALTER TABLE Pagamento
-                    ADD COLUMN id_despesa INTEGER REFERENCES Despesa(id_despesa);
-                """;
-
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute(sqlAlterTable);
-            System.out.println("Coluna id_despesa adicionada com sucesso à tabela Pagamento.");
-        } catch (SQLException e) {
-            System.out.println("Erro ao adicionar a coluna id_despesa: " + e.getMessage());
-        }
-    }
     public void inserirUsuariosGrupoDespesa() {
         if (conn == null) {
             System.out.println("Conexão não estabelecida. Não foi possível inserir dados.");
@@ -360,13 +350,245 @@ public class GestorBaseDados {
             (1, 2, 1, 50.00), -- Fred deve R$50 para Afonso
             (1, 3, 1, 50.00); -- Lucas deve R$50 para Afonso
         """);
-
+            incrementarVersao();
             System.out.println("Usuários, grupo e despesa inseridos com sucesso.");
         } catch (SQLException e) {
             System.err.println("Erro ao inserir dados: " + e.getMessage());
         }
     }
 
+    public String obterUltimaQuery() {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT query FROM LogUpdates ORDER BY id DESC LIMIT 1")) {
+            if (rs.next()) {
+                return rs.getString("query");
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao obter última query: " + e.getMessage());
+        }
+        return null;
+    }
+
+
+    // Adiciona uma query ao log
+    public static synchronized void adicionarQuery(String query) {
+        queryLog.append(query).append(";\n");
+    }
+    // Método para exportar e limpar o log de queries
+    // Método para exportar e limpar o log de queries
+    public static synchronized String exportarQueryLog() {
+        if (queryLog.length() == 0) {
+            return ""; // Retorna vazio se não houver queries
+        }
+        incrementarVersao();
+        // Exporta o conteúdo do log
+        String exportacao = queryLog.toString();
+
+        // Limpa o log
+        queryLog.setLength(0);
+        return exportacao;
+    }
+
+    // Recupera as queries acumuladas e limpa o log
+    public static String obterEAtualizarLog() {
+        String queries = queryLog.toString();
+        queryLog.setLength(0); // Limpa o log
+        return queries;
+    }
+
+
+    public String exportarBancoDeDados() {
+        StringBuilder scriptSQL = new StringBuilder();
+
+        // Gerar script SQL para criação de tabelas com "IF NOT EXISTS"
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Version (
+            version INTEGER
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Utilizador (
+            id_utilizador INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            telefone TEXT,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Grupo (
+            id_grupo INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT UNIQUE NOT NULL,
+            data_criacao TEXT,
+            id_criador INTEGER,
+            FOREIGN KEY (id_criador) REFERENCES Utilizador(id_utilizador)
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS utilizador_grupo (
+            id_utilizador INTEGER,
+            id_grupo INTEGER,
+            gasto_total REAL DEFAULT 0,
+            valor_devido REAL DEFAULT 0,
+            valor_a_receber REAL DEFAULT 0,
+            FOREIGN KEY (id_utilizador) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_grupo) REFERENCES Grupo(id_grupo),
+            PRIMARY KEY (id_utilizador, id_grupo)
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Despesa (
+            id_despesa INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_grupo INTEGER,
+            id_criador INTEGER,
+            data TEXT,
+            descricao TEXT,
+            valor REAL,
+            id_pagador INTEGER,
+            FOREIGN KEY (id_grupo) REFERENCES Grupo(id_grupo),
+            FOREIGN KEY (id_pagador) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_criador) REFERENCES Utilizador(id_utilizador)
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS DespesaUtilizador (
+            id_despesa INTEGER,
+            id_utilizador INTEGER,         
+            id_remetente INTEGER,          
+            valor_devido REAL DEFAULT 0,   
+            PRIMARY KEY (id_despesa, id_utilizador),
+            FOREIGN KEY (id_despesa) REFERENCES Despesa(id_despesa),
+            FOREIGN KEY (id_utilizador) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_remetente) REFERENCES Utilizador(id_utilizador)
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Pagamento (
+            id_pagamento INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_grupo INTEGER,
+            id_despesa INTEGER,
+            id_pagador INTEGER,
+            id_recebedor INTEGER,
+            data TEXT,
+            valor REAL,
+            FOREIGN KEY (id_grupo) REFERENCES Grupo(id_grupo),
+            FOREIGN KEY (id_pagador) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_recebedor) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_despesa) REFERENCES Despesa(id_despesa)
+        );
+    """);
+
+        scriptSQL.append("""
+        CREATE TABLE IF NOT EXISTS Convite (
+            id_convite INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_utilizador_convite INTEGER,
+            id_grupo INTEGER,
+            id_utilizador_convidado INTEGER,
+            estado TEXT,
+            data_envio TEXT,
+            data_resposta TEXT,
+            FOREIGN KEY (id_grupo) REFERENCES Grupo(id_grupo),
+            FOREIGN KEY (id_utilizador_convite) REFERENCES Utilizador(id_utilizador),
+            FOREIGN KEY (id_utilizador_convidado) REFERENCES Utilizador(id_utilizador)
+        );
+    """);
+
+        try (Statement stmt = conn.createStatement()) {
+            ResultSet rs;
+
+            // Tabela Version
+            rs = stmt.executeQuery("SELECT * FROM Version");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Version (version) VALUES (%d);
+            """, rs.getInt("version")));
+            }
+
+            // Tabela Utilizador
+            rs = stmt.executeQuery("SELECT * FROM Utilizador");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Utilizador (id_utilizador, nome, telefone, email, password) VALUES
+                (%d, '%s', '%s', '%s', '%s');
+            """, rs.getInt("id_utilizador"), rs.getString("nome"), rs.getString("telefone"),
+                        rs.getString("email"), rs.getString("password")));
+            }
+
+            // Tabela Grupo
+            rs = stmt.executeQuery("SELECT * FROM Grupo");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Grupo (id_grupo, nome, data_criacao, id_criador) VALUES
+                (%d, '%s', '%s', %d);
+            """, rs.getInt("id_grupo"), rs.getString("nome"), rs.getString("data_criacao"),
+                        rs.getInt("id_criador")));
+            }
+
+            // Tabela utilizador_grupo
+            rs = stmt.executeQuery("SELECT * FROM utilizador_grupo");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO utilizador_grupo (id_utilizador, id_grupo, gasto_total, valor_devido, valor_a_receber) VALUES
+                (%d, %d, %.2f, %.2f, %.2f);
+            """, rs.getInt("id_utilizador"), rs.getInt("id_grupo"),
+                        rs.getDouble("gasto_total"), rs.getDouble("valor_devido"), rs.getDouble("valor_a_receber")));
+            }
+
+            // Tabela Despesa
+            rs = stmt.executeQuery("SELECT * FROM Despesa");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Despesa (id_despesa, id_grupo, id_criador, data, descricao, valor, id_pagador) VALUES
+                (%d, %d, %d, '%s', '%s', %.2f, %d);
+            """, rs.getInt("id_despesa"), rs.getInt("id_grupo"), rs.getInt("id_criador"),
+                        rs.getString("data"), rs.getString("descricao"),
+                        rs.getDouble("valor"), rs.getInt("id_pagador")));
+            }
+
+            // Tabela DespesaUtilizador
+            rs = stmt.executeQuery("SELECT * FROM DespesaUtilizador");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO DespesaUtilizador (id_despesa, id_utilizador, id_remetente, valor_devido) VALUES
+                (%d, %d, %d, %.2f);
+            """, rs.getInt("id_despesa"), rs.getInt("id_utilizador"),
+                        rs.getInt("id_remetente"), rs.getDouble("valor_devido")));
+            }
+
+            // Tabela Pagamento
+            rs = stmt.executeQuery("SELECT * FROM Pagamento");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Pagamento (id_pagamento, id_grupo, id_despesa, id_pagador, id_recebedor, data, valor) VALUES
+                (%d, %d, %d, %d, %d, '%s', %.2f);
+            """, rs.getInt("id_pagamento"), rs.getInt("id_grupo"), rs.getInt("id_despesa"),
+                        rs.getInt("id_pagador"), rs.getInt("id_recebedor"), rs.getString("data"),
+                        rs.getDouble("valor")));
+            }
+
+            // Tabela Convite
+            rs = stmt.executeQuery("SELECT * FROM Convite");
+            while (rs.next()) {
+                scriptSQL.append(String.format(Locale.US, """
+                INSERT OR IGNORE INTO Convite (id_convite, id_utilizador_convite, id_grupo, id_utilizador_convidado, estado, data_envio, data_resposta) VALUES
+                (%d, %d, %d, %d, '%s', '%s', '%s');
+            """, rs.getInt("id_convite"), rs.getInt("id_utilizador_convite"), rs.getInt("id_grupo"),
+                        rs.getInt("id_utilizador_convidado"), rs.getString("estado"),
+                        rs.getString("data_envio"), rs.getString("data_resposta")));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Erro ao gerar script SQL: " + e.getMessage());
+        }
+
+        return scriptSQL.toString();
+    }
 
 
 }

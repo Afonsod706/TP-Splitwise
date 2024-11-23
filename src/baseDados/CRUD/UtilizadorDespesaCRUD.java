@@ -1,10 +1,12 @@
 package baseDados.CRUD;
 
 import Cliente.src.Entidades.UtilizadorDespesa;
+import baseDados.Config.GestorBaseDados;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class UtilizadorDespesaCRUD {
     private Connection connection;
@@ -21,12 +23,92 @@ public class UtilizadorDespesaCRUD {
             pstmt.setInt(2, idUtilizador);
             pstmt.setInt(3, idRemetente);
             pstmt.setDouble(4, valorDevido);
-            return pstmt.executeUpdate() > 0;
+
+            int rowsInserted = pstmt.executeUpdate();
+            if (rowsInserted > 0) {
+                // Gerar query SQL para replicação
+                String queryFinal = String.format(Locale.US,
+                        "INSERT INTO DespesaUtilizador (id_despesa, id_utilizador, id_remetente, valor_devido) VALUES (%d, %d, %d, %.2f);",
+                        idDespesa, idUtilizador, idRemetente, valorDevido);
+                GestorBaseDados.adicionarQuery(queryFinal);
+
+                return true;
+            }
         } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+            System.err.println("Erro ao criar detalhe de participante: " + e.getMessage());
+        }
+        return false;
+    }
+
+    // Atualiza o valor devido de um utilizador em uma despesa
+    public boolean atualizarValorDevido(int idDespesa, int idUtilizador, double novoValorDevido) {
+        String sql = "UPDATE DespesaUtilizador SET valor_devido = ? WHERE id_despesa = ? AND id_utilizador = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setDouble(1, novoValorDevido);
+            pstmt.setInt(2, idDespesa);
+            pstmt.setInt(3, idUtilizador);
+
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                // Gerar query SQL para replicação
+                String queryFinal = String.format(Locale.US,
+                        "UPDATE DespesaUtilizador SET valor_devido = %.2f WHERE id_despesa = %d AND id_utilizador = %d;",
+                        novoValorDevido, idDespesa, idUtilizador);
+                GestorBaseDados.adicionarQuery(queryFinal);
+
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao atualizar valor devido: " + e.getMessage());
+        }
+        return false;
+    }
+
+    //  Remove todos os participantes associados a uma despesa específica
+    public void deletarParticipantesDaDespesa(int idDespesa) {
+        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDespesa);
+
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                // Gerar query SQL para replicação
+                String queryFinal = String.format(Locale.US,
+                        "DELETE FROM DespesaUtilizador WHERE id_despesa = %d;",
+                        idDespesa);
+                GestorBaseDados.adicionarQuery(queryFinal);
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao deletar participantes da despesa: " + e.getMessage());
         }
     }
+
+    // Remove o participante associado a uma despesa específica
+    public boolean deletarDetalheParticipante(int idDespesa, int idUtilizador) {
+        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, idDespesa);
+            pstmt.setInt(2, idUtilizador);
+
+            int rowsDeleted = pstmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                // Gerar query SQL para replicação
+                String queryFinal = String.format(Locale.US,
+                        "DELETE FROM DespesaUtilizador WHERE id_despesa = %d AND id_utilizador = %d;",
+                        idDespesa, idUtilizador);
+                GestorBaseDados.adicionarQuery(queryFinal);
+
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao deletar participante da despesa: " + e.getMessage());
+        }
+        return false;
+    }
+
+/// *************************************************************
+
+
 
     // Lê todas as despesas associadas a um utilizador
     public List<UtilizadorDespesa> listarDespesasPorUtilizador(int idUtilizador) {
@@ -47,32 +129,6 @@ public class UtilizadorDespesaCRUD {
             e.printStackTrace();
         }
         return detalhes;
-    }
-
-    // Atualiza o valor devido de um utilizador em uma despesa
-    public boolean atualizarValorDevido(int idDespesa, int idUtilizador, double novoValorDevido) {
-        String sql = "UPDATE DespesaUtilizador SET valor_devido = ? WHERE id_despesa = ? AND id_utilizador = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setDouble(1, novoValorDevido);
-            pstmt.setInt(2, idDespesa);
-            pstmt.setInt(3, idUtilizador);
-            return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-
-   //  Remove todos os participantes associados a uma despesa específica
-    public void deletarParticipantesDaDespesa(int idDespesa) {
-        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, idDespesa);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
     }
 
     // Metodo para obter o nome de um utilizador pelo ID
@@ -189,17 +245,5 @@ public class UtilizadorDespesaCRUD {
         return 0.0; // Retorna 0.0 caso nenhum valor seja encontrado ou ocorra um erro
     }
 
-    // Remove o participante associado a uma despesa específica
-    public boolean deletarDetalheParticipante(int idDespesa, int idUtilizador) {
-        String sql = "DELETE FROM DespesaUtilizador WHERE id_despesa = ? AND id_utilizador = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, idDespesa);
-            pstmt.setInt(2, idUtilizador);
-            return pstmt.executeUpdate() > 0; // Retorna true se a remoção foi bem-sucedida
-        } catch (SQLException e) {
-            System.err.println("Erro ao deletar participante da despesa: " + e.getMessage());
-            return false;
-        }
-    }
 
 }

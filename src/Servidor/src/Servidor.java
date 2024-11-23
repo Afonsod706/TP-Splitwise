@@ -2,18 +2,23 @@ package Servidor.src;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.concurrent.*;
 
+import Cliente.src.Controller.Comandos;
+import Cliente.src.Controller.Comunicacao;
 import Servidor.src.Handler.ClienteHandler;
 import baseDados.Config.GestorBaseDados;
 
 public class Servidor {
     private static final int PORT = 5001;
     private static final int BACKUP_PORT = 5002; // Porta para comunicação com o servidor de backup
-    private static final int MULTICAST_PORT = 4446; // Porta multicast para envio de heartbeats
-    private static final String MULTICAST_GROUP = "230.0.0.1"; // Grupo Multicast
-    public static final int TIMEOUT_SECONDS = 60;
+    private static final int MULTICAST_PORT = 4444; // Porta multicast para envio de heartbeats
+    private static final String MULTICAST_GROUP = "230.44.44.44"; // Grupo Multicast
+    public static final int TIMEOUT_SECONDS = 10000;
+    public static GestorBaseDados gestorBaseDados;
+    private static final ExecutorService executor = Executors.newFixedThreadPool(10);
 
     // Armazena os ObjectOutputStream associados aos emails dos usuários logados
     public static final ConcurrentHashMap<String, ObjectOutputStream> usuariosLogados = new ConcurrentHashMap<>();
@@ -21,29 +26,53 @@ public class Servidor {
     private static ServerSocket serverSocket;
 
     public static void main(String[] args) {
-        GestorBaseDados gestorBaseDados = new GestorBaseDados();
+
+
+        /*    if (args.length < 2) {
+                System.err.println("Uso: Servidor <PORTO_TCP> <CAMINHO_BD>");
+                System.exit(1);
+            }
+
+            int porto = Integer.parseInt(args[0]);
+            String caminhoBD = args[1];
+            gestorBaseDados = new GestorBaseDados(caminhoBD);
+            PORT = porto;
+        */
+
+        gestorBaseDados = new GestorBaseDados();
 
         // Hook para garantir desconexão de clientes no encerramento
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Servidor está encerrando... Desconectando clientes.");
-            desconectarTodosClientes();
-            System.out.println("Todos os clientes foram desconectados. Encerrando servidor.");
+            try {
+                if (serverSocket != null && !serverSocket.isClosed()) {
+                    System.out.println("Servidor está encerrando... Desconectando clientes.");
+                    desconectarTodosClientes();
+                    System.out.println("Todos os clientes foram desconectados. Encerrando servidor.");
+                    serverSocket.close();
+                }
+            } catch (IOException e) {
+                System.err.println("Erro ao fechar o ServerSocket: " + e.getMessage());
+            }
         }));
+
 
         try {
             serverSocket = new ServerSocket(PORT);
             System.out.println("Servidor principal iniciado na porta " + PORT);
 
-            new Thread(() -> iniciarBackupHandler()).start();
+            executor.submit(() -> iniciarBackupHandler());
+            //new Thread(() -> iniciarBackupHandler()).start();
 
             // Inicia um thread para enviar heartbeats
-            new Thread(() -> enviarHeartbeat()).start();
+            executor.submit(() -> enviarHeartbeat());
+            //new Thread(() -> enviarHeartbeat()).start();
 
             while (true) {
                 // Aceita novas conexões de clientes
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Novo cliente conectado: " + clientSocket.getInetAddress());
-                new Thread(new ClienteHandler(clientSocket, gestorBaseDados)).start();
+                executor.submit(() -> new ClienteHandler(clientSocket, gestorBaseDados).run());
+                //new Thread(new ClienteHandler(clientSocket, gestorBaseDados)).start();
             }
         } catch (IOException e) {
             System.err.println("Erro no servidor: " + e.getMessage());
@@ -56,19 +85,61 @@ public class Servidor {
     private static void enviarHeartbeat() {
         try (MulticastSocket socket = new MulticastSocket()) {
             InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
-            socket.setTimeToLive(255); // Define o TTL (Time to Live) para a comunicação multicast
+            socket.setTimeToLive(255);
 
             while (true) {
-                Thread.sleep(30000); // Envia heartbeat a cada 30 segundos
-                String mensagem = "HEARTBEAT";
+                Thread.sleep(10000);
+                String mensagem = "HEARTBEAT:" + BACKUP_PORT + ":" + gestorBaseDados.getVersaoAtual();
                 DatagramPacket packet = new DatagramPacket(mensagem.getBytes(), mensagem.length(), group, MULTICAST_PORT);
                 socket.send(packet);
-                System.out.println("Heartbeat enviado: " + LocalDateTime.now());
+                System.out.println("Heartbeat enviado: " + mensagem);
             }
         } catch (IOException | InterruptedException e) {
             System.err.println("Erro ao enviar heartbeat: " + e.getMessage());
         }
     }
+
+
+    public static void enviarAlteracaoBanco() {
+        try (MulticastSocket socket = new MulticastSocket()) {
+            InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
+            socket.setTimeToLive(255);
+
+            // Obter as alterações e a versão atual
+            String queryLog = gestorBaseDados.exportarQueryLog();
+            int versaoAtual = gestorBaseDados.getVersaoAtual();
+
+            if (queryLog.isEmpty()) {
+                System.out.println("Nenhuma alteração a ser enviada via multicast.");
+                return;
+            }
+
+
+
+            // Construir a mensagem a ser enviada
+            String message = String.format("HEARTBEAT:%d:%d:%s", BACKUP_PORT, versaoAtual, queryLog);
+
+
+            // Converter a mensagem para bytes
+            byte[] data = message.getBytes(StandardCharsets.UTF_8);
+
+            // Verificar se o tamanho está dentro do limite de um pacote UDP
+            if (data.length > 65507) { // Limite teórico de um pacote UDP
+                System.err.println("Erro: Dados muito grandes para serem enviados em um único pacote UDP.");
+                return;
+            }
+
+            // Criar o pacote e enviar
+            DatagramPacket packet = new DatagramPacket(data, data.length, group, MULTICAST_PORT);
+            socket.send(packet);
+
+            System.out.printf("Alterações enviadas via multicast (tamanho %d bytes):.%n\n", data.length,message);
+            notificarClientes("Alterações enviadas via multicast (versão="+versaoAtual+")");
+        } catch (IOException e) {
+            System.err.println("Erro ao enviar alterações via multicast: " + e.getMessage());
+        }
+    }
+
 
     // Metodo para gerenciar a comunicação com o servidor de backup
     private static void iniciarBackupHandler() {
@@ -76,16 +147,9 @@ public class Servidor {
             System.out.println("Servidor de backup aguardando conexões na porta " + BACKUP_PORT);
 
             while (true) {
-                try (Socket backupSocket = backupServerSocket.accept();
-                     PrintWriter out = new PrintWriter(backupSocket.getOutputStream(), true)) {
-
+                try (Socket backupSocket = backupServerSocket.accept()) {
                     System.out.println("Servidor de backup conectado: " + backupSocket.getInetAddress());
-
-                    // Envia o caminho da base de dados original para o servidor de backup
-                    String caminhoBaseDados = "src/baseDados/BaseDados3.db";
-                    out.println(caminhoBaseDados);
-                    System.out.println("Caminho da base de dados enviado ao servidor de backup: " + caminhoBaseDados);
-
+                    sincronizarComBackup(backupSocket);
                 } catch (IOException e) {
                     System.err.println("Erro ao lidar com o servidor de backup: " + e.getMessage());
                 }
@@ -94,6 +158,28 @@ public class Servidor {
             System.err.println("Erro ao iniciar o handler de backup: " + e.getMessage());
         }
     }
+
+    private static void notificarClientes(String mensagem) {
+        usuariosLogados.forEach((email, outStream) -> {
+            try {
+                // Criação do objeto de notificação
+                Comunicacao notificacao = new Comunicacao();
+                notificacao.setComando(Comandos.NOTIFICACAO); // Comando padrão para notificações
+                notificacao.setResposta(mensagem); // Mensagem a ser enviada
+
+                // Enviar a notificação ao cliente
+                outStream.writeObject(notificacao);
+                outStream.flush();
+
+                // Confirmar envio no console
+                System.out.println("Notificação enviada para: " + email);
+            } catch (IOException e) {
+                // Log do erro se ocorrer falha
+                System.err.println("Erro ao notificar cliente " + email + ": " + e.getMessage());
+            }
+        });
+    }
+
 
 
     // Desconecta todos os clientes e fecha os streams
@@ -113,4 +199,38 @@ public class Servidor {
         usuariosLogados.clear();
     }
 
+    private static void sincronizarComBackup(Socket backupSocket) {
+        synchronized (Servidor.class) {
+            try (ObjectOutputStream out = new ObjectOutputStream(backupSocket.getOutputStream());
+                 ObjectInputStream in = new ObjectInputStream(backupSocket.getInputStream())) {
+
+
+                // Passo 1: Enviar versão do servidor principal
+                int versaoPrincipal = gestorBaseDados.getVersaoAtual();
+                out.writeInt(versaoPrincipal);
+                out.flush();
+                System.out.println("Versão do servidor principal enviada: " + versaoPrincipal);
+
+
+                // Passo 2: Receber versão do backup
+                int versaoBackup = in.readInt();
+                System.out.println("Versão do backup recebida: " + versaoBackup);
+                System.out.println("Versão do servidor principal enviada: " + versaoPrincipal);
+                if (versaoBackup < versaoPrincipal) {
+                    System.out.println("Backup desatualizado. Enviando estrutura e dados...");
+                    String scriptSQL = gestorBaseDados.exportarBancoDeDados();
+                    out.writeObject(scriptSQL);
+                    out.flush();
+                    System.out.println("Script SQL enviado ao backup.");
+                } else {
+                    System.out.println("Backup já está atualizado. Nenhuma ação necessária.");
+                }
+                //notificarClientes("Base de dados BACKUP foi atualizada.");
+
+            } catch (IOException e) {
+                System.err.println("Erro ao sincronizar com o backup: " + e.getMessage());
+            }
+        }
+
+    }
 }

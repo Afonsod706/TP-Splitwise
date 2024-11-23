@@ -34,12 +34,12 @@ public class ClienteVista {
         // Loop principal alterna entre os menus
         while (true) {
             System.out.println("conecatdo:" + conectado);
-            Thread.sleep(500);
             if (!conectado) {
                 menuAutenticacao(); // Mostra o menu de autenticação
             } else {
                 exibirMenuPrincipal(); // Mostra o menu principal após autenticação
             }
+            Thread.sleep(100);
         }
     }
 
@@ -180,7 +180,8 @@ public class ClienteVista {
                         eliminarPagamento();
                         break;
                     case "22":
-                        try {
+                        realizarLogout();
+                      /*  try {
                             Comunicacao novoComunicacao = new Comunicacao();
                             novoComunicacao.setComando(Comandos.SAIR);
                             comunicacaoServidor.enviarMensagem(novoComunicacao);
@@ -188,7 +189,7 @@ public class ClienteVista {
                             comunicacaoServidor.encerrar();
                         } finally {
                             System.exit(0); // Garante que o programa será encerrado
-                        }
+                        }*/
                         break;
                     default:
                         System.out.println("Comando inválido. Tente novamente.");
@@ -585,6 +586,17 @@ public class ClienteVista {
         String nome = userInput.readLine();
         System.out.println("Digite seu telemovel:");
         String telemovel = userInput.readLine();
+      /*  while (true) {
+            System.out.println("Digite seu telemovel (9 dígitos):");
+            telemovel = userInput.readLine();
+
+            // Verifica se o telemovel contém exatamente 9 dígitos e é numérico
+            if (telemovel.matches("\\d{9}")) {
+                break; // Sai do loop se for válido
+            } else {
+                System.out.println("Erro: O número de telemóvel deve ter exatamente 9 dígitos numéricos. Tente novamente.");
+            }
+        }*/
         System.out.println("Digite seu email:");
         String email = userInput.readLine();
         System.out.println("Digite sua senha:");
@@ -646,15 +658,18 @@ public class ClienteVista {
     }
 
     private void realizarLogout() {
-        Comunicacao novoComunicacao = new Comunicacao();
-        novoComunicacao.setComando(Comandos.LOGOUT);
-        comunicacaoServidor.enviarMensagem(novoComunicacao);
-
         // Atualiza o estado do cliente
-        comunicacao.setAutenticado(false);
-        conectado = false;
+        try{
+            comunicacao.setAutenticado(false);
+            conectado = false;
+            Comunicacao novoComunicacao = new Comunicacao();
+            novoComunicacao.setComando(Comandos.LOGOUT);
+            comunicacaoServidor.enviarMensagem(novoComunicacao);
+            System.out.println("Logout realizado com sucesso. Voltando ao menu de autenticação...");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
-        System.out.println("Logout realizado com sucesso. Voltando ao menu de autenticação...");
     }
 
     // Atualiza a vista com mensagens recebidas do servidor
@@ -683,7 +698,6 @@ public class ClienteVista {
             System.out.println("Você foi desconectado. Retornando ao menu de autenticação...");
             conectado = false;
             comunicacao.setAutenticado(false);
-            return;
         } else if (mensagem.getComando() == Comandos.LOGIN || mensagem.getComando() == Comandos.REGISTRAR) {
             conectado = mensagem.getAutenticado();
             comunicacao.setAutenticado(mensagem.getAutenticado());
