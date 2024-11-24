@@ -234,6 +234,8 @@ public class ClienteHandler implements Runnable {
             boolean atualizado = utilizadorCRUD.atualizarDados(dadosAtualizados);
 
             if (atualizado) {
+                dadosAtualizados=utilizadorCRUD.buscarPorEmail(dadosAtualizados.getEmail());
+                comunicacao.setUtilizador(dadosAtualizados);
                 comunicacao.setResposta("Dados atualizados com sucesso!");
                 // Atualiza os dados do utilizador autenticado na sessão
                 utilizadorAutenticado.setNome(dadosAtualizados.getNome());
@@ -443,6 +445,19 @@ public class ClienteHandler implements Runnable {
     }
 
     private void processarListagemGrupos(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
+        // Verifica se o utilizador está autenticado
+        if (utilizadorAutenticado == null) {
+            comunicacao.setResposta("Erro: Utilizador não autenticado.");
+            outObj.writeObject(comunicacao);
+            outObj.flush();
+            return;
+        }
+
+        // Verifica se um grupo está selecionado (se necessário, o que não faz sentido aqui)
+        if (grupoSelecionado == null) {
+            comunicacao.setResposta("Aviso: Nenhum grupo está selecionado. Listando todos os grupos disponíveis.");
+        }
+
         UtilizadorGrupoCRUD utilizadorGrupoCRUD = new UtilizadorGrupoCRUD(gestorBaseDados.getConexao());
         List<Grupo> grupos = utilizadorGrupoCRUD.listarGruposPorUtilizador(utilizadorAutenticado.getId());
 
@@ -868,8 +883,9 @@ public class ClienteHandler implements Runnable {
 
         // Incrementar o valor a receber do pagante
         boolean atualizadoPagante = utilizadorGrupoCRUD.incrementarValorReceber(pagante.getId(), grupoSelecionado.getIdGrupo(), despesa.getValor());
-        if (!atualizadoPagante) {
-            comunicacao.setResposta("Erro ao atualizar o saldo a receber do pagante.");
+        boolean atualizadoPaganteTotal = utilizadorGrupoCRUD.incrementarGastoTotal(pagante.getId(), grupoSelecionado.getIdGrupo(), despesa.getValor());
+        if (!atualizadoPagante && !atualizadoPaganteTotal) {
+            comunicacao.setResposta("Erro ao atualizar o saldo a receber e total do pagante.");
             outObj.writeObject(comunicacao);
             outObj.flush();
             return;
@@ -1093,8 +1109,9 @@ public class ClienteHandler implements Runnable {
             valorTotalAReceberPagador += valorDevido;
         }
 
-        // Ajustar o valor a receber do pagador
+        // Ajustar o valor a receber e total do pagador
         utilizadorGrupoCRUD.incrementarValorReceber(despesa.getIdPagador(), grupoSelecionado.getIdGrupo(), -valorTotalAReceberPagador);
+        utilizadorGrupoCRUD.incrementarGastoTotal(despesa.getIdPagador(), grupoSelecionado.getIdGrupo(), -valorTotalAReceberPagador);
 
         // Remover detalhes da despesa da tabela `DespesaUtilizador`
         utilizadorDespesaCRUD.deletarParticipantesDaDespesa(despesa.getId());
@@ -1134,19 +1151,24 @@ public class ClienteHandler implements Runnable {
         }
 
         DespesaCRUD despesaCRUD = new DespesaCRUD(gestorBaseDados.getConexao());
+        UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
         List<Despesa> historicoDespesas = despesaCRUD.listarDespesasPorGrupo(grupoSelecionado.getIdGrupo());
 
         if (historicoDespesas.isEmpty()) {
             comunicacao.setResposta("Nenhuma despesa encontrada para o grupo selecionado.");
         } else {
-            StringBuilder resposta = new StringBuilder("Histórico de despesas do grupo:\n");
+            StringBuilder resposta = new StringBuilder("Histórico de despesas do grupo: " + grupoSelecionado.getNome() + "\n");
             for (Despesa despesa : historicoDespesas) {
+                // Obtém o nome do criador da despesa pelo ID
+                String nomeCriador = utilizadorCRUD.buscarPorId(despesa.getIdCriador()).getEmail();
+
                 resposta.append(String.format(
-                        "Descrição: %s | Valor: %.2f€ | Data: %s | Criador: %s\n",
+                        "ID: %d | Descrição: %s | Valor: %.2f€ | Data: %s | Criador: %s\n",
+                        despesa.getId(),
                         despesa.getDescricao(),
                         despesa.getValor(),
                         despesa.getData(),
-                        despesa.getIdCriador() // Supondo que o nome do criador esteja no objeto Despesa
+                        nomeCriador
                 ));
             }
             comunicacao.setResposta(resposta.toString());
@@ -1385,17 +1407,20 @@ public class ClienteHandler implements Runnable {
 
         PagamentoCRUD pagamentoCRUD = new PagamentoCRUD(gestorBaseDados.getConexao());
         List<Pagamento> pagamentos = pagamentoCRUD.listarPagamentosPorGrupo(grupoSelecionado.getIdGrupo());
+        UtilizadorCRUD utilizadorCRUD=new UtilizadorCRUD(gestorBaseDados.getConexao());
 
         if (pagamentos.isEmpty()) {
             comunicacao.setResposta("Nenhum pagamento encontrado para o grupo selecionado.");
         } else {
             StringBuilder resposta = new StringBuilder("Pagamentos realizados no grupo:\n");
             for (Pagamento pagamento : pagamentos) {
+                String pagador= utilizadorCRUD.buscarPorId(pagamento.getIdPagador()).getEmail();
+                String recebedor= utilizadorCRUD.buscarPorId(pagamento.getIdRecebedor()).getEmail();
                 resposta.append(String.format(
-                        "ID: %d | Pagador: %d | Recebedor: %d | Valor: %.2f€ | Data: %s\n",
+                        "ID: %d | Pagador: %s | Recebedor: %s | Valor: %.2f€ | Data: %s\n",
                         pagamento.getIdPagamento(),
-                        pagamento.getIdPagador(),
-                        pagamento.getIdRecebedor(),
+                        pagador,
+                        recebedor,
                         pagamento.getValor(),
                         pagamento.getData()
                 ));

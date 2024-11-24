@@ -17,10 +17,26 @@ public class GestorBaseDados {
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
-            limparDadosTeste();
-           // ApagarTabelas();
             criarTabelas();  // Cria as tabelas ao estabelecer a conexão
             inserirUsuariosGrupoDespesa();
+        } catch (SQLException e) {
+            System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
+        }
+    }
+
+    public GestorBaseDados(String caminhoBD) {
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        String url = "jdbc:sqlite:"+caminhoBD; // Caminho da base de dados
+        try {
+            conn = DriverManager.getConnection(url);
+            System.out.println("Conexão com a base de dados estabelecida com sucesso.");
+            // ApagarTabelas();
+            criarTabelas();  // Cria as tabelas ao estabelecer a conexão
+           // inserirUsuariosGrupoDespesa();
         } catch (SQLException e) {
             System.out.println("Erro ao conectar à base de dados: " + e.getMessage());
         }

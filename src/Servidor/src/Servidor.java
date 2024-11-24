@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Scanner;
 import java.util.concurrent.*;
 
 import Cliente.src.Controller.Comandos;
@@ -12,11 +13,11 @@ import Servidor.src.Handler.ClienteHandler;
 import baseDados.Config.GestorBaseDados;
 
 public class Servidor {
-    private static final int PORT = 5001;
+    private static  int PORT = 5001;
     private static final int BACKUP_PORT = 5002; // Porta para comunicação com o servidor de backup
     private static final int MULTICAST_PORT = 4444; // Porta multicast para envio de heartbeats
     private static final String MULTICAST_GROUP = "230.44.44.44"; // Grupo Multicast
-    public static final int TIMEOUT_SECONDS = 10000;
+    public static final int TIMEOUT_SECONDS = 10;
     public static GestorBaseDados gestorBaseDados;
     private static final ExecutorService executor = Executors.newFixedThreadPool(10);
 
@@ -28,18 +29,34 @@ public class Servidor {
     public static void main(String[] args) {
 
 
-        /*    if (args.length < 2) {
-                System.err.println("Uso: Servidor <PORTO_TCP> <CAMINHO_BD>");
-                System.exit(1);
-            }
-
+        if (args.length >= 2) {
+            // Configurar servidor e caminho da base de dados a partir dos argumentos da linha de comando
             int porto = Integer.parseInt(args[0]);
-            String caminhoBD = args[1];
+            String diretorioBD = args[1];
+            String caminhoBD = diretorioBD.endsWith("/") || diretorioBD.endsWith("\\")
+                    ? diretorioBD + "baseDadosServidor.db"
+                    : diretorioBD + File.separator + "baseDadosServidor.db";
+
             gestorBaseDados = new GestorBaseDados(caminhoBD);
             PORT = porto;
-        */
+        } else {
+            // Solicitar ao usuário o porto do servidor e o diretório da base de dados
+            Scanner scanner = new Scanner(System.in);
 
-        gestorBaseDados = new GestorBaseDados();
+            System.out.print("Digite o porto do servidor (default: 5001): ");
+            String portInput = scanner.nextLine().trim();
+            PORT = portInput.isEmpty() ? 5001 : Integer.parseInt(portInput);
+
+            System.out.print("Digite o diretório da base de dados (default: src/baseDados/): ");
+            String diretorioInput = scanner.nextLine().trim();
+            String diretorioBD = diretorioInput.isEmpty() ? "src/baseDados/" : diretorioInput;
+
+            String caminhoBD = diretorioBD.endsWith("/") || diretorioBD.endsWith("\\")
+                    ? diretorioBD + "baseDadosServidor.db"
+                    : diretorioBD + File.separator + "baseDadosServidor.db";
+
+            gestorBaseDados = new GestorBaseDados(caminhoBD);
+        }
 
         // Hook para garantir desconexão de clientes no encerramento
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
