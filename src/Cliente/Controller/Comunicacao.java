@@ -1,7 +1,8 @@
 
-package Cliente.src.Controller;
+package Cliente.Controller;
 
-import Cliente.src.Entidades.*;
+import Cliente.Entidades.*;
+import Cliente.Entidades.*;
 
 import java.io.Serializable;
 import java.util.List;

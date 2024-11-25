@@ -1,9 +1,9 @@
-package Cliente.src.View;
+package Cliente.View;
 
-import Cliente.src.Entidades.*;
-import Cliente.src.Network.ClienteComunicacao;
-import Cliente.src.Controller.Comandos;
-import Cliente.src.Controller.Comunicacao;
+import Cliente.Entidades.*;
+import Cliente.Network.ClienteComunicacao;
+import Cliente.Controller.Comandos;
+import Cliente.Controller.Comunicacao;
 
 import java.io.BufferedReader;
 import java.io.IOException;

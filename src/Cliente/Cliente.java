@@ -1,9 +1,8 @@
-package Cliente.src;
+package Cliente;
 
-import Cliente.src.Network.ClienteComunicacao;
-import Cliente.src.View.ClienteVista;
+import Cliente.Network.ClienteComunicacao;
+import Cliente.View.ClienteVista;
 
-import java.io.IOException;
 import java.util.Scanner;
 
 public class Cliente {

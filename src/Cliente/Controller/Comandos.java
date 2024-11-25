@@ -1,4 +1,4 @@
-package Cliente.src.Controller;
+package Cliente.Controller;
 
 public enum Comandos {
     REGISTRAR, LOGIN, SAIR, CRIAR_GRUPO, SELECIONAR_GRUPO,

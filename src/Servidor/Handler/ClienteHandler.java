@@ -1,9 +1,9 @@
-package Servidor.src.Handler;
+package Servidor.Handler;
 
 
-import Cliente.src.Entidades.*;
-import Cliente.src.Controller.Comandos;
-import Cliente.src.Controller.Comunicacao;
+import Cliente.Entidades.*;
+import Cliente.Controller.Comandos;
+import Cliente.Controller.Comunicacao;
 import baseDados.CRUD.*;
 import baseDados.Config.GestorBaseDados;
 
@@ -19,7 +19,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 
-import static Servidor.src.Servidor.*;
+import static Servidor.Servidor.*;
 import static java.lang.Math.abs;
 
 public class ClienteHandler implements Runnable {
@@ -190,6 +190,9 @@ public class ClienteHandler implements Runnable {
         Utilizador utilizador = comunicacao.getUtilizador();
         UtilizadorCRUD utilizadorCRUD = new UtilizadorCRUD(gestorBaseDados.getConexao());
 
+        // Regex para validar que o email termina com .com
+        String emailRegex = ".*\\.com$";
+
         // Verifica se os campos obrigatórios estão preenchidos
         if (utilizador.getNome() == null || utilizador.getNome().trim().isEmpty() ||
                 utilizador.getEmail() == null || utilizador.getEmail().trim().isEmpty() ||
@@ -197,8 +200,13 @@ public class ClienteHandler implements Runnable {
                 utilizador.getTelefone() == null || utilizador.getTelefone().trim().isEmpty()) {
 
             comunicacao.setResposta("Erro: Todos os campos obrigatórios devem estar preenchidos (Nome, Email, Senha, Telemóvel).");
+
+        } else if (!utilizador.getEmail().matches(emailRegex)) { // Verifica se o email termina com .com
+            comunicacao.setResposta("Erro: O email fornecido deve terminar com '.com'.");
+
         } else if (utilizadorCRUD.emailExiste(utilizador.getEmail())) {
             comunicacao.setResposta("Erro: Este email já está registrado.");
+
         } else if (utilizadorCRUD.adicionarUtilizador(utilizador)) {
             utilizadorAutenticado = utilizadorCRUD.buscarPorEmail(utilizador.getEmail()); // Atualiza o estado
             comunicacao.setResposta("Registro concluído com sucesso!");
@@ -207,13 +215,16 @@ public class ClienteHandler implements Runnable {
             autenticado = true;
             usuariosLogados.put(utilizadorAutenticado.getEmail(), outObj); // Armazena o ObjectOutputStream
             exibirDados();
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro: Não foi possível concluir o registro. Tente novamente.");
         }
-        enviarAlteracaoBanco();
+
+
         outObj.writeObject(comunicacao); // Envia o objeto atualizado ao cliente
         outObj.flush();
     }
+
 
     private void processarEdicaoDados(Comunicacao comunicacao, ObjectOutputStream outObj) throws IOException {
         Utilizador dadosAtualizados = comunicacao.getUtilizador();
@@ -241,11 +252,12 @@ public class ClienteHandler implements Runnable {
                 utilizadorAutenticado.setNome(dadosAtualizados.getNome());
                 utilizadorAutenticado.setPassword(dadosAtualizados.getPassword());
                 utilizadorAutenticado.setTelefone(dadosAtualizados.getTelefone());
+                enviarAlteracaoBanco();
             } else {
                 comunicacao.setResposta("Erro ao atualizar os dados. Tente novamente.");
             }
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -298,10 +310,11 @@ public class ClienteHandler implements Runnable {
         boolean removido = utilizadorGrupoCRUD.removerAssociacao(utilizadorAutenticado.getId(), grupoSelecionado.getIdGrupo());
         if (removido) {
             comunicacao.setResposta("Você saiu do grupo com sucesso.");
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro ao tentar sair do grupo. Tente novamente.");
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -353,11 +366,12 @@ public class ClienteHandler implements Runnable {
         boolean eliminado = grupoCRUD.eliminarGrupo(grupoSelecionado.getIdGrupo());
         if (eliminado) {
             comunicacao.setResposta("Grupo eliminado com sucesso.");
+            enviarAlteracaoBanco();
             grupoSelecionado = null; // Limpa o grupo selecionado após a eliminação
         } else {
             comunicacao.setResposta("Erro ao tentar eliminar o grupo. Tente novamente.");
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -406,11 +420,12 @@ public class ClienteHandler implements Runnable {
         if (atualizado) {
             grupoSelecionado.setNome(novoNomeGrupo); // Atualiza o nome do grupo localmente
             comunicacao.setResposta("Grupo editado com sucesso. Novo nome: " + grupoSelecionado.getNome());
+            enviarAlteracaoBanco();
         } else {
             grupoSelecionado.setNome(nomeAntigo);
             comunicacao.setResposta("Erro ao atualizar o grupo. Tente novamente.");
         }
-        enviarAlteracaoBanco();
+
         // Envia a resposta de volta ao cliente
         outObj.writeObject(comunicacao);
         outObj.flush();
@@ -494,6 +509,7 @@ public class ClienteHandler implements Runnable {
                     grupos.add(grupoCriado);
                     comunicacao.setResposta("Grupo criado com sucesso!");
                     comunicacao.setResposta("Grupo criado com sucesso e associado ao utilizador!");
+                    enviarAlteracaoBanco();
                 } else
                     // Caso haja erro na associação, informar falha
                     comunicacao.setResposta("Erro ao associar o utilizador ao grupo. O grupo foi criado, mas não associado.");
@@ -501,7 +517,7 @@ public class ClienteHandler implements Runnable {
                 comunicacao.setResposta("Erro ao criar o grupo.");
             }
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -679,9 +695,11 @@ public class ClienteHandler implements Runnable {
                 // Aceitação: associa o utilizador ao grupo
                 utilizadorGrupoCRUD.associarUtilizadorAGrupo(utilizadorAutenticado.getId(), convite.getIdGrupo());
                 comunicacao.setResposta("Convite aceito. Você agora faz parte do grupo: " + convite.getIdGrupo());
+                enviarAlteracaoBanco();
             }
         } else if (atualizado) {
             comunicacao.setResposta("Convite recusado com sucesso.");
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro ao processar sua resposta ao convite. Tente novamente.");
         }
@@ -690,7 +708,7 @@ public class ClienteHandler implements Runnable {
         System.out.println("Resposta ao convite processada: ID=" + idConvite
                 + ", Estado=" + estado
                 + ", Utilizador=" + utilizadorAutenticado.getId());
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -804,10 +822,11 @@ public class ClienteHandler implements Runnable {
             // Enviar notificação ao convidado se ele estiver logado
             String mensagemNotificacao = "Você recebeu um novo convite para o grupo: " + grupoSelecionado.getNome();
             enviarNotificacao(emailConvidado, mensagemNotificacao, Comandos.NOTIFICACAO);
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro ao enviar o convite. Tente novamente.");
         }
-        enviarAlteracaoBanco();
+
 
         outObj.writeObject(comunicacao);
         outObj.flush();
@@ -939,8 +958,9 @@ public class ClienteHandler implements Runnable {
             comunicacao.setResposta("Erro ao dividir a despesa entre os membros do grupo. Operação cancelada.");
         } else {
             comunicacao.setResposta("Despesa adicionada com sucesso e dividida entre os membros do grupo.");
+            enviarAlteracaoBanco();
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1040,10 +1060,11 @@ public class ClienteHandler implements Runnable {
                 }
             }
             comunicacao.setResposta("Despesa atualizada com sucesso e notificações enviadas.");
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro ao atualizar a despesa. Operação revertida.");
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1376,6 +1397,7 @@ public class ClienteHandler implements Runnable {
                             grupoSelecionado.getNome()
                     );
                     enviarNotificacao(pagamento.getEmailRecebedor(), mensagemPagamentoEliminadoRecebedor, Comandos.NOTIFICACAO);
+                    enviarAlteracaoBanco();
                 } else {
                     comunicacao.setResposta("Pagamento registrado, mas houve um erro ao ajustar saldos e dívidas.");
                 }
@@ -1386,7 +1408,7 @@ public class ClienteHandler implements Runnable {
             comunicacao.setResposta("Erro inesperado ao processar pagamento: " + e.getMessage());
             e.printStackTrace();
         }
-        enviarAlteracaoBanco();
+
         outObj.writeObject(comunicacao);
         outObj.flush();
     }
@@ -1489,7 +1511,7 @@ public class ClienteHandler implements Runnable {
             // Enviar notificações para ambos os usuários
             enviarNotificacao(utilizadorCRUD.buscarPorId(pagamento.getIdPagador()).getEmail(), mensagemPagamentoEliminado, Comandos.NOTIFICACAO);
             enviarNotificacao(utilizadorCRUD.buscarPorId(pagamento.getIdRecebedor()).getEmail(), mensagemPagamentoEliminado, Comandos.NOTIFICACAO);
-
+            enviarAlteracaoBanco();
         } else {
             comunicacao.setResposta("Erro ao eliminar o pagamento.");
         }

@@ -5,7 +5,7 @@ import java.util.Locale;
 public class GestorBaseDados {
     public static StringBuilder queryLog = new StringBuilder();
     private Connection conn;
-
+    private static String url;
     // Construtor que inicializa a conexão com a base de dados
     public GestorBaseDados() {
         try {
@@ -30,7 +30,7 @@ public class GestorBaseDados {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-        String url = "jdbc:sqlite:"+caminhoBD; // Caminho da base de dados
+         url = "jdbc:sqlite:"+caminhoBD; // Caminho da base de dados
         try {
             conn = DriverManager.getConnection(url);
             System.out.println("Conexão com a base de dados estabelecida com sucesso.");
@@ -181,7 +181,7 @@ public class GestorBaseDados {
     // Método para atualizar a versão do banco de dados
     // Incrementa a versão do banco de dados (static)
     public static synchronized void incrementarVersao() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:src/baseDados/baseDados3.db");
+        try (Connection conn = DriverManager.getConnection(url);
              Statement stmt = conn.createStatement()) {
 
             // Incrementa a versão com base na versão atual
@@ -396,13 +396,9 @@ public class GestorBaseDados {
         if (queryLog.length() == 0) {
             return ""; // Retorna vazio se não houver queries
         }
-        incrementarVersao();
-        // Exporta o conteúdo do log
-        String exportacao = queryLog.toString();
 
-        // Limpa o log
-        queryLog.setLength(0);
-        return exportacao;
+        // Exporta o conteúdo do log
+        return obterEAtualizarLog();
     }
 
     // Recupera as queries acumuladas e limpa o log

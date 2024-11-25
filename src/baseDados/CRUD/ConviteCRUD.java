@@ -1,6 +1,6 @@
 package baseDados.CRUD;
 
-import Cliente.src.Entidades.Convite;
+import Cliente.Entidades.Convite;
 import baseDados.Config.GestorBaseDados;
 
 import java.sql.*;

@@ -1,6 +1,6 @@
 package baseDados.CRUD;
 
-import Cliente.src.Entidades.Utilizador;
+import Cliente.Entidades.Utilizador;
 import baseDados.Config.GestorBaseDados;
 
 import java.sql.*;
@@ -124,19 +124,22 @@ public class UtilizadorCRUD {
     }
 
     public boolean atualizarDados(Utilizador utilizador) {
-        String query = "UPDATE Utilizador SET nome = ?, telefone = ? WHERE email = ?";
+        // Query para atualizar nome, telefone e senha
+        String query = "UPDATE Utilizador SET nome = ?, telefone = ?, password = ? WHERE email = ?";
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            // Configurar os valores dos parâmetros
             stmt.setString(1, utilizador.getNome());
             stmt.setString(2, utilizador.getTelefone());
-            stmt.setString(3, utilizador.getEmail());
+            stmt.setString(3, utilizador.getPassword()); // Atualizar senha
+            stmt.setString(4, utilizador.getEmail());
 
             int rowsUpdated = stmt.executeUpdate();
             if (rowsUpdated > 0) {
                 // Gerar a query SQL finalizada com os valores atualizados
                 String queryFinal = String.format(
                         Locale.US, // Usar Locale.US para consistência na formatação
-                        "UPDATE Utilizador SET nome = '%s', telefone = '%s' WHERE email = '%s'",
-                        utilizador.getNome(), utilizador.getTelefone(), utilizador.getEmail()
+                        "UPDATE Utilizador SET nome = '%s', telefone = '%s', password = '%s' WHERE email = '%s'",
+                        utilizador.getNome(), utilizador.getTelefone(), utilizador.getPassword(), utilizador.getEmail()
                 );
                 // Adicionar ao log de queries para envio no heartbeat
                 GestorBaseDados.adicionarQuery(queryFinal);
@@ -147,4 +150,5 @@ public class UtilizadorCRUD {
         }
         return false;
     }
+
 }

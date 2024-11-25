@@ -1,4 +1,4 @@
-package Servidor.src.Handler;
+package Servidor.Handler;
 
 import baseDados.Config.GestorBaseDados;
 

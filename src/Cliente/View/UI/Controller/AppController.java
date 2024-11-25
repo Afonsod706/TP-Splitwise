@@ -1,11 +1,15 @@
-package Cliente.src.View.UI.Controller;
+package Cliente.View.UI.Controller;
 
-import Cliente.src.Controller.Comandos;
-import Cliente.src.Controller.Comunicacao;
-import Cliente.src.Entidades.*;
-import Cliente.src.Network.ClienteComunicacao;
-import Cliente.src.View.UI.View.MenuBoard.DashboardView;
-import Cliente.src.View.UI.View.MenuBoard.LoginView;
+import Cliente.Controller.Comandos;
+import Cliente.Controller.Comunicacao;
+import Cliente.Entidades.Convite;
+import Cliente.Entidades.Despesa;
+import Cliente.Entidades.Grupo;
+import Cliente.Entidades.Pagamento;
+import Cliente.Entidades.*;
+import Cliente.Network.ClienteComunicacao;
+import Cliente.View.UI.View.MenuBoard.DashboardView;
+import Cliente.View.UI.View.MenuBoard.LoginView;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.TextInputDialog;
@@ -30,13 +34,38 @@ public class AppController {
     // Redireciona para a tela de menu principal
     public void mostrarMenuPrincipal() {
         Platform.runLater(() -> {
-            dashboardView = new DashboardView(stage, clienteComunicacao, this);
-            root.setCenter(dashboardView.getView()); // Atualiza a área central do layout principal
-            stage.setScene(new javafx.scene.Scene(root, 900, 600)); // Configura a cena principal
-            stage.show();
-        });
+            try {
+                // Recria o DashboardView sempre que o menu principal é exibido
+                dashboardView = new DashboardView(stage, clienteComunicacao, this);
 
+                // Atualiza o layout principal
+                root.setCenter(dashboardView.getView());
+
+                // Configura a cena no Stage
+                if (stage.getScene() == null || stage.getScene().getRoot() != root) {
+                    stage.setScene(new javafx.scene.Scene(root, 900, 600));
+                }
+
+                // Mostra a janela principal
+                stage.show();
+            } catch (Exception e) {
+                System.err.println("Erro ao exibir o menu principal: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
     }
+
+
+    public void resetarEstado() {
+        Platform.runLater(() -> {
+            // Limpa o DashboardView e o estado do layout principal
+            if (dashboardView != null) {
+                dashboardView = null;
+            }
+            root.setCenter(null); // Remove qualquer conteúdo do layout principal
+        });
+    }
+
 
     public BorderPane getRoot() {
         return root;

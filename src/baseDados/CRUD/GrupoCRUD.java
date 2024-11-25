@@ -1,6 +1,6 @@
 package baseDados.CRUD;
 
-import Cliente.src.Entidades.Grupo;
+import Cliente.Entidades.Grupo;
 import baseDados.Config.GestorBaseDados;
 
 import java.sql.*;

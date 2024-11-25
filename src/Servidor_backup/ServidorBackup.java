@@ -11,15 +11,35 @@ public class ServidorBackup {
     private static final String MULTICAST_GROUP = "230.44.44.44"; // Grupo Multicast
     private static final int MULTICAST_PORT = 4444; // Porta Multicast
     private static final int TCP_PORT = 5002; // Porta para conectar ao servidor principal
-    private static final String BACKUP_FOLDER = "src/Servidor_backup/baseDadosBackUp"; // Pasta onde os backups serão armazenados
-    private static  String BACKUP_DB_PATH = BACKUP_FOLDER + "/backup.db";
-private static final int TIMEOUT=30000;
-private static long ultimoHeartbeat = System.currentTimeMillis();
+    private static String BACKUP_FOLDER; // Pasta onde os backups serão armazenados
+    private static String BACKUP_DB_PATH = BACKUP_FOLDER + "/backup.db";
+    private static final int TIMEOUT = 30000;
+    private static long ultimoHeartbeat = System.currentTimeMillis();
     private static boolean sincronizado = false; // Variável de controle para sincronização inicial
 
     public static void main(String[] args) {
         System.out.println("Iniciando Servidor de Backup...");
-        verificarDiretorioBackup();
+
+        // Verificar se o caminho do diretório foi fornecido como argumento
+        String diretorioBD = "";
+        if (args.length >= 1) {
+            diretorioBD = args[0];
+            BACKUP_FOLDER = diretorioBD;
+        } else {
+            System.err.println("Uso correto: ServidorBackup.java <diretorio_do_banco>");
+            System.exit(1);
+//            // Valor padrão caso o argumento não seja fornecido
+//            diretorioBD = "src/Servidor_backup/baseDadosBackUp/";
+        }
+
+        // Certificar-se de que o diretório termina com um separador
+        if (!diretorioBD.endsWith("/") && !diretorioBD.endsWith("\\")) {
+            diretorioBD += File.separator;
+        }
+        verificarDiretorioBackup(diretorioBD);
+
+        BACKUP_DB_PATH = diretorioBD + "backup.db";
+
 
         // Inicializar o banco de dados do backup
         inicializarBackupDB();
@@ -40,22 +60,36 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
 
 
     private static void inicializarBackupDB() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + BACKUP_DB_PATH);
-             Statement stmt = conn.createStatement()) {
-            // Cria tabela de controle de versão se não existir
-            String criarTabelaVersao = """
-                        CREATE TABLE IF NOT EXISTS Version (
-                            version INTEGER PRIMARY KEY
-                        );
-                    """;
-            stmt.execute(criarTabelaVersao);
+        try {
+            // Verificar se o diretório do backup existe
+            File backupDir = new File(new File(BACKUP_DB_PATH).getParent());
+            if (!backupDir.exists()) {
+                if (!backupDir.mkdirs()) {
+                    System.err.println("Erro ao criar o diretório de backup. Finalizando...");
+                    System.exit(1);
+                } else {
+                    System.out.println("Diretório de backup criado com sucesso: " + backupDir.getAbsolutePath());
+                }
+            }
 
-            // Inicializa a versão como 0, caso esteja vazia
-            String verificarVersao = "SELECT COUNT(*) AS total FROM Version";
-            try (ResultSet rs = stmt.executeQuery(verificarVersao)) {
-                if (rs.next() && rs.getInt("total") == 0) {
-                    stmt.execute("INSERT INTO Version (version) VALUES (0)");
-                    System.out.println("Tabela Version inicializada no backup.");
+            // Conectar ao banco de dados e criar a tabela Version se necessário
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + BACKUP_DB_PATH);
+                 Statement stmt = conn.createStatement()) {
+                // Cria tabela de controle de versão se não existir
+                String criarTabelaVersao = """
+                            CREATE TABLE IF NOT EXISTS Version (
+                                version INTEGER PRIMARY KEY
+                            );
+                        """;
+                stmt.execute(criarTabelaVersao);
+
+                // Inicializa a versão como 0, caso esteja vazia
+                String verificarVersao = "SELECT COUNT(*) AS total FROM Version";
+                try (ResultSet rs = stmt.executeQuery(verificarVersao)) {
+                    if (rs.next() && rs.getInt("total") == 0) {
+                        stmt.execute("INSERT INTO Version (version) VALUES (0)");
+                        System.out.println("Tabela Version inicializada no backup.");
+                    }
                 }
             }
         } catch (SQLException e) {
@@ -67,19 +101,32 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
     // Escuta mensagens Multicast (Heartbeats) do servidor principal
     // Escuta mensagens Multicast (Heartbeats) do servidor principal
     private static void escutarHeartbeats() {
+        ExecutorService monitorExecutor = Executors.newSingleThreadExecutor();
+
         try (MulticastSocket socket = new MulticastSocket(MULTICAST_PORT)) {
             InetAddress group = InetAddress.getByName(MULTICAST_GROUP);
             socket.joinGroup(group);
             System.out.println("Servidor Backup: Escutando heartbeats no grupo " + MULTICAST_GROUP + " na porta " + MULTICAST_PORT);
 
             byte[] buffer = new byte[8192];
-            while (true) {
-                // Verificar timeout
-                if (System.currentTimeMillis() - ultimoHeartbeat > TIMEOUT) {
-                    System.out.println("Heartbeat ausente por mais de 30 segundos. Encerrando backup...");
-                    System.exit(0);
-                }
 
+            // Thread separada para monitorar o timeout
+            monitorExecutor.submit(() -> {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(5000); // Verifica a cada 5 segundos
+                        if (System.currentTimeMillis() - ultimoHeartbeat > TIMEOUT) {
+                            System.out.println("Heartbeat ausente por mais de 30 segundos. Encerrando backup...");
+                            System.exit(0); // Finaliza o processo
+                        }
+                    } catch (InterruptedException e) {
+                        System.out.println("Monitoramento de timeout interrompido.");
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+
+            while (true) {
                 // Recebe Heartbeat
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
@@ -110,7 +157,20 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
                         if (partes.length > 3) {
                             // Mensagem com alterações no banco
                             System.out.println("Alterações recebidas para a versão: " + versaoRecebida);
-                            executarScriptSQL(partes[3], versaoRecebida);
+
+                            int versaoAtual = obterVersaoAtual(); // Obtém a versão atual do backup
+                            if((versaoRecebida-versaoAtual)>1) {
+                                System.err.printf(
+                                        "Inconsistência detectada! Versão recebida: %d, Versão atual: %d. Diferença maior que 1.%n",
+                                        versaoRecebida, versaoAtual
+                                );
+                                System.err.println("Encerrando devido a inconsistência.");
+                                System.exit(1); // Encerra o processo
+                            }else if (versaoAtual+1 == versaoRecebida) {
+                                // Mensagem com alterações no banco
+                                System.out.println("Alterações recebidas para a versão: " + versaoRecebida);
+                                executarScriptSQL(partes[3], versaoRecebida);
+                            }
                         } else {
                             // Mensagem regular sem alterações
                             System.out.println("Heartbeat regular recebido. Nenhuma alteração necessária.");
@@ -120,6 +180,8 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
             }
         } catch (IOException e) {
             System.err.println("Erro ao escutar heartbeats: " + e.getMessage());
+        } finally {
+            monitorExecutor.shutdownNow();
         }
     }
 
@@ -133,25 +195,26 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
             // Passo 1: Receber versão do servidor principal
             int versaoPrincipal = in.readInt();
             System.out.println("Versão do servidor principal recebida: " + versaoPrincipal);
-
+            int versaoAtual;
             // Passo 2: Enviar versão do backup
-            int versaoAtual = obterVersaoAtual();
+            versaoAtual = obterVersaoAtual();
+
             out.writeInt(versaoAtual);
             out.flush();
             System.out.println("Versão do backup enviada: " + versaoAtual);
-            // Verificar condições de inconsistência
-            if (versaoPrincipal - versaoAtual > 1 || versaoPrincipal - versaoAtual < 0) {
-                System.err.println("Inconsistência de versão detectada. Encerrando backup...");
-                System.exit(1); // Finaliza o servidor de backup
-            }
-            if (versaoPrincipal > versaoAtual) {
+
+            if (versaoPrincipal > versaoAtual && !sincronizado || versaoPrincipal == 0 && versaoAtual == 0) {
                 System.out.println("Versão desatualizada. Recebendo script SQL...");
                 String scriptSQL = (String) in.readObject();
-                BACKUP_DB_PATH= BACKUP_FOLDER + "/backup_"+versaoPrincipal+".db";
+                BACKUP_DB_PATH = BACKUP_FOLDER + "/backup_" + versaoPrincipal + ".db";
                 // Aplicar o script SQL recebido e atualizar a versão
-                executarScriptSQL(scriptSQL,versaoPrincipal);
+                executarScriptSQL(scriptSQL, versaoPrincipal);
                 System.out.println("Banco de dados do backup atualizado.");
 
+            }  // Verificar condições de inconsistência
+            else if (versaoPrincipal - versaoAtual > 1 || versaoPrincipal - versaoAtual < 0) {
+                System.err.println("Inconsistência de versão detectada. Encerrando backup...");
+                System.exit(1); // Finaliza o servidor de backup
             } else {
                 System.out.println("Backup já está atualizado.");
             }
@@ -207,9 +270,9 @@ private static long ultimoHeartbeat = System.currentTimeMillis();
     }
 
 
-    private static void verificarDiretorioBackup() {
-        File backupDir = new File(BACKUP_FOLDER);
-        if (backupDir.exists() && backupDir.isDirectory() && backupDir.listFiles().length!= 0) {
+    private static void verificarDiretorioBackup(String backuFolder) {
+        File backupDir = new File(backuFolder);
+        if (backupDir.exists() && backupDir.isDirectory() && backupDir.listFiles().length != 0) {
             System.err.println("Diretório de backup não está vazio. Finalizando...");
             System.exit(1); // Encerrar com erro
         }

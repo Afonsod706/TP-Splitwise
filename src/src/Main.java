@@ -1,7 +1,5 @@
 package src;
 
-import Cliente.src.Entidades.Utilizador;
-
 public class Main {
 //    public static void main(String[] args) {
 //        // Criar utilizadores
