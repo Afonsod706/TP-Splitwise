@@ -11,6 +11,7 @@ import Cliente.Network.ClienteComunicacao;
 import Cliente.View.UI.View.MenuBoard.DashboardView;
 import Cliente.View.UI.View.MenuBoard.LoginView;
 import javafx.application.Platform;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.layout.BorderPane;
@@ -32,21 +33,23 @@ public class AppController {
     }
 
     // Redireciona para a tela de menu principal
+    // Redireciona para a tela de menu principal
     public void mostrarMenuPrincipal() {
         Platform.runLater(() -> {
             try {
-                // Recria o DashboardView sempre que o menu principal é exibido
+                // Sempre cria um novo DashboardView para evitar conflitos
                 dashboardView = new DashboardView(stage, clienteComunicacao, this);
 
-                // Atualiza o layout principal
-                root.setCenter(dashboardView.getView());
+                // Cria um novo root para evitar reuso do antigo
+                BorderPane novoRoot = new BorderPane();
+                novoRoot.setCenter(dashboardView.getView());
+                root = novoRoot; // Atualiza a referência do root no controlador
 
-                // Configura a cena no Stage
-                if (stage.getScene() == null || stage.getScene().getRoot() != root) {
-                    stage.setScene(new javafx.scene.Scene(root, 900, 600));
-                }
+                // Configura a cena no Stage, substituindo qualquer cena existente
+                Scene novaCena = new Scene(root, 900, 600);
+                stage.setScene(novaCena);
 
-                // Mostra a janela principal
+                // Exibe a janela
                 stage.show();
             } catch (Exception e) {
                 System.err.println("Erro ao exibir o menu principal: " + e.getMessage());
