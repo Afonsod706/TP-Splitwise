@@ -775,5 +775,8 @@ public void solicitarAceitarConvite() {
             }
         });
     }
+    public void setRoot(BorderPane novoRoot) {
+        this.root = novoRoot;
+    }
 
 }

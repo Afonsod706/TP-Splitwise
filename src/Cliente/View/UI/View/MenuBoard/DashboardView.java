@@ -153,17 +153,16 @@ public class DashboardView {
             comunicacaoServidor.enviarMensagem(comunicacao);
 
             // Limpa o estado do cliente local
-            appController.getComunicacao().setUtilizador(null); // Remove o usuário autenticado
-            appController.setDashboardView(null); // Remove o DashboardView atual
+            appController.getComunicacao().setAutenticado(false);
+
+            // Redefine o root para evitar referências antigas
+            appController.setRoot(new BorderPane());
 
             // Exibe uma mensagem de notificação
             mostrarMensagemSucesso("Logout realizado", "Você foi desconectado com sucesso.");
 
-            // Redefine a interface e exibe a tela de login
-            Platform.runLater(() -> {
-                appController.getRoot().setCenter(null); // Limpa a área central do layout
-                appController.mostrarLogin(); // Redireciona para a tela de login
-            });
+            // Redireciona para a tela de login
+            Platform.runLater(() -> appController.mostrarLogin());
         } catch (Exception e) {
             mostrarErro("Erro ao fazer logout", "Não foi possível completar o logout: " + e.getMessage());
         }
@@ -182,11 +181,21 @@ public class DashboardView {
     private void atualizarEstiloBotaoSelecionado(Button botaoSelecionado, Button[] todosBotoes) {
         // Limpa o estilo de todos os botões
         for (Button btn : todosBotoes) {
-            btn.setStyle("-fx-background-color: #34495E; -fx-text-fill: white; -fx-font-size: 14px;");
+            if (btn.getText().equalsIgnoreCase("Logout")) {
+                // Mantém o estilo específico para o botão Logout
+                btn.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white; -fx-font-size: 14px;");
+            } else {
+                // Estilo padrão para outros botões
+                btn.setStyle("-fx-background-color: #34495E; -fx-text-fill: white; -fx-font-size: 14px;");
+            }
         }
-        // Aplica o estilo ao botão selecionado
-        botaoSelecionado.setStyle("-fx-background-color: #34495E; -fx-text-fill: white; -fx-font-size: 14px; -fx-border-color: white; -fx-border-width: 2px;");
+
+        // Aplica o estilo de "selecionado" ao botão clicado (exceto Logout)
+        if (!botaoSelecionado.getText().equalsIgnoreCase("Logout")) {
+            botaoSelecionado.setStyle("-fx-background-color: #34495E; -fx-text-fill: white; -fx-font-size: 14px; -fx-border-color: white; -fx-border-width: 2px;");
+        }
     }
+
 
     private void mostrarGrupos(Stage stage) {
         grupoUI = new GrupoUI(appController);
